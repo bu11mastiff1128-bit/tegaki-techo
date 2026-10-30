@@ -61,7 +61,7 @@ select{font:inherit;font-size:14px;color:var(--fg);background:var(--chip);border
 #stage{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px max(24px,env(safe-area-inset-bottom,0px))}
 #sheet{position:relative;margin:0 auto;box-shadow:0 1px 2px rgba(20,30,50,.12),0 8px 28px rgba(20,30,50,.14);border-radius:2px;background:#fcfcfa}
 #sheet canvas{position:absolute;left:0;top:0;display:block}
-#ov{touch-action:pan-x pan-y}
+#stage,#ov{touch-action:pan-x pan-y}
 body.finger #ov{touch-action:none}
 .hint{max-width:640px;margin:0 auto 12px;background:var(--bar);border:1px solid var(--line);border-radius:10px;padding:10px 8px 10px 14px;display:flex;gap:8px;align-items:center;font-size:13.5px;line-height:1.6}
 .hint p{margin:0;flex:1;min-width:0}
@@ -109,6 +109,9 @@ input,textarea,select{-webkit-user-select:text;user-select:text}
 #stampCard{position:fixed;width:min(280px,calc(100vw - 32px));background:var(--bar);color:var(--fg);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.22);padding:12px;display:flex;flex-direction:column;gap:6px}
 #stampCard h3{margin:0 0 4px;font-size:14px;font-weight:700;display:flex;justify-content:space-between;align-items:baseline}
 #stampCard h3 span{font-size:12px;font-weight:500;color:var(--muted)}
+.skinds{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:4px}
+.skinds button{min-height:38px;background:var(--chip);font-size:13px;font-weight:500;border:1.5px solid transparent;padding:0 2px}
+.skinds button[aria-pressed="true"]{font-weight:700;border-color:currentColor}
 .srow{display:grid;grid-template-columns:44px 44px 1fr 44px;align-items:center;gap:6px}
 .srow b{font-size:15px;font-family:var(--font-num)}
 .srow output{text-align:center;font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
@@ -209,7 +212,7 @@ input,textarea,select{-webkit-user-select:text;user-select:text}
   <p class="enote">Googleカレンダーから取り込んだ予定です。この画面では編集・削除できません。</p>
   <div class="eacts"><button id="gClose" type="button" class="ok">閉じる</button></div>
 </div></div>
-<div id="stampBg" hidden><div id="stampCard" role="dialog" aria-label="台数"><h3>台数<span id="stampDay"></span></h3><div id="stampRows"></div>
+<div id="stampBg" hidden><div id="stampCard" role="dialog" aria-label="台数"><h3>台数<span id="stampDay"></span></h3><div id="stampKinds" class="skinds"></div><div id="stampRows"></div>
 <div class="sacts"><button id="stampDel" class="danger">削除</button><button id="stampCancel">閉じる</button><button id="stampOk" class="ok">置く</button></div></div></div>
 <div id="toast" hidden></div>
 
@@ -410,22 +413,26 @@ function pdfPageDef(){
 /* ---------- 描画 ---------- */
 const cv=$('#cv'),ov=$('#ov'),ctx=cv.getContext('2d'),octx=ov.getContext('2d'),sheet=$('#sheet'),stage=$('#stage');
 /* 台数の札 */
-const stampText=v=>UNITS.filter(u=>v[u]).map(u=>u+v[u]).join('・');
+const KINDS={swap:{sign:'',lab:'交換',bg:'#e2ebf7',bd:'#7f9cc7',fg:'#1f3d6e'},in:{sign:'＋',lab:'設置のみ',bg:'#e1f2e6',bd:'#62a77c',fg:'#1d5a35'},out:{sign:'−',lab:'引上のみ',bg:'#f8e3e1',bd:'#c97870',fg:'#7a2620'}};
+const kindOf=s=>s.k==='in'||s.k==='out'?s.k:'swap';
+const stampText=(v,k='swap')=>KINDS[k].sign+UNITS.filter(u=>v[u]).map(u=>u+v[u]).join('・');
 const STF=`700 9.5px ${FS}`,STH=14;
 const measCtx=document.createElement('canvas').getContext('2d');
-function stampWidth(v){measCtx.font=STF;return measCtx.measureText(stampText(v)).width+10}
+function stampWidth(v,k){measCtx.font=STF;return measCtx.measureText(stampText(v,k)).width+10}
 function drawStamp(c,s){const w=s.bw,y=s.y-STH/2;c.save();c.globalAlpha=1;c.globalCompositeOperation='source-over';
-  c.fillStyle=s.sel?'#fde3c4':'#e2ebf7';c.strokeStyle=s.sel?'#d9822b':'#7f9cc7';c.lineWidth=s.sel?1.2:.8;c.beginPath();c.roundRect?c.roundRect(s.x,y,w,STH,4):c.rect(s.x,y,w,STH);c.fill();c.stroke();
-  c.fillStyle=s.sel?'#7a3f06':'#1f3d6e';c.font=STF;c.textBaseline='middle';c.fillText(stampText(s.v),s.x+5,s.y+.5);c.restore()}
-/* 台数計：1段目＝全体（黒）、2段目＝選択した札（オレンジ）、3段目＝全体−選択（緑） */
-function drawTotals(c,r,zw,list){const sum={},sel={};let any=false;
-  for(const s of list)if(s.t==='stamp')for(const u of UNITS){const n=s.v[u]||0;sum[u]=(sum[u]||0)+n;if(s.sel){sel[u]=(sel[u]||0)+n;any=true}}
+  const kd=KINDS[kindOf(s)];
+  c.fillStyle=s.sel?'#fde3c4':kd.bg;c.strokeStyle=s.sel?'#d9822b':kd.bd;c.lineWidth=s.sel?1.2:.8;c.beginPath();c.roundRect?c.roundRect(s.x,y,w,STH,4):c.rect(s.x,y,w,STH);c.fill();c.stroke();
+  c.fillStyle=s.sel?'#7a3f06':kd.fg;c.font=STF;c.textBaseline='middle';c.fillText(stampText(s.v,kindOf(s)),s.x+5,s.y+.5);c.restore()}
+/* 台数計：1段目＝全体（黒）、2段目＝選択した札（オレンジ）、3段目＝全体−選択（緑）。
+   各段は種類別に数える（記号なし＝交換、＋＝設置のみ、−＝引上のみ） */
+function drawTotals(c,r,zw,list){const sum={swap:{},in:{},out:{}},sel={swap:{},in:{},out:{}};let any=false;
+  for(const s of list)if(s.t==='stamp'){const k=kindOf(s);for(const u of UNITS){const n=s.v[u]||0;sum[k][u]=(sum[k][u]||0)+n;if(s.sel){sel[k][u]=(sel[k][u]||0)+n;any=true}}}
   const sc=r.w/zw;c.save();c.translate(r.x,r.y);c.scale(sc,sc);c.textBaseline='alphabetic';
-  const tok=o=>UNITS.filter(u=>o[u]).map(u=>u+o[u]);
+  const tok=o=>Object.keys(KINDS).flatMap(k=>UNITS.filter(u=>o[k][u]).map(u=>KINDS[k].sign+u+o[k][u]));
   const all=tok(sum);
   if(!all.length){c.fillStyle=RULE_STRONG;c.font=`500 10px ${FS}`;c.fillText('—',8,TOT0+44);c.restore();return}
   const groups=[{p:all,col:INK}];
-  if(any){const rest={};for(const u of UNITS)rest[u]=(sum[u]||0)-(sel[u]||0);
+  if(any){const rest={swap:{},in:{},out:{}};for(const k in rest)for(const u of UNITS)rest[k][u]=(sum[k][u]||0)-(sel[k][u]||0);
     groups.push({p:tok(sel),col:'#b4620f'},{p:tok(rest).length?tok(rest):['0'],col:'#2f7d55'})}
   let L=[];
   for(const[fs,sep]of[[15,'  '],[13.5,' '],[12,' '],[10.5,' ']]){c.font=`700 ${fs}px ${FS}`;L=[];
@@ -495,7 +502,7 @@ function eraseAt(q){const{z,s}=act,x=(q.x-z.r.x)/s,y=(q.y-z.r.y)/s,t=SIZES.erase
 function eraseEvt(e){const evs=(e.getCoalescedEvents&&e.getCoalescedEvents().length)?e.getCoalescedEvents():[e];for(const ev of evs)eraseAt(pt(ev))}
 
 ov.addEventListener('pointerdown',e=>{
-  if(!cur||act)return;
+  if(!cur||act||pinch)return;
   if(e.pointerType==='mouse'&&e.button!==0)return;
   closeMenu();const q=pt(e),canDraw=e.pointerType!=='touch'||state.finger||state.tool==='stamp'||state.tool==='event';
   const link=[...cur.links].reverse().find(l=>inR(q,l.r));
@@ -534,6 +541,27 @@ ov.addEventListener('pointerup',endPointer);ov.addEventListener('pointercancel',
 /* iPadのSafariでペンの動きがスクロールにならないようにする */
 const stopStylus=e=>{if(state.finger||[...e.touches].some(t=>t.touchType==='stylus'))e.cancelable&&e.preventDefault()};
 ov.addEventListener('touchstart',stopStylus,{passive:false});ov.addEventListener('touchmove',stopStylus,{passive:false});
+
+/* ---------- 指2本で拡大縮小 ----------
+   動かしている間は紙を CSS で伸縮して見せるだけにし、指を離したときにその倍率で描き直す（大きな canvas を毎回描き直すと重いため） */
+let pinch=null;
+const fingers=e=>[...e.touches].filter(t=>t.touchType!=='stylus');
+const mid=(a,b)=>({x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2}),dist=(a,b)=>Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+stage.addEventListener('touchstart',e=>{const f=fingers(e);if(!cur||pinch||f.length!==2)return;
+  if(act){clearTimeout(act.timer);if(act.mode==='erase'&&act.removed.length)pushUndo({op:'del',id:act.z.id,st:act.removed});act=null;octx.setTransform(1,0,0,1,0,0);octx.clearRect(0,0,ov.width,ov.height)}
+  const r=sheet.getBoundingClientRect(),c=mid(f[0],f[1]),z0=state.zoom;
+  pinch={d0:dist(f[0],f[1])||1,c0:c,c:c,z0,s:1,px:(c.x-r.left)/z0,py:(c.y-r.top)/z0};
+  sheet.style.transformOrigin=`${pinch.px*z0}px ${pinch.py*z0}px`;e.preventDefault()},{passive:false});
+stage.addEventListener('touchmove',e=>{if(!pinch)return;e.preventDefault();const f=fingers(e);if(f.length<2)return;
+  const p=pinch;p.c=mid(f[0],f[1]);p.s=Math.max(.3/p.z0,Math.min(4/p.z0,dist(f[0],f[1])/p.d0));
+  sheet.style.transform=`translate(${p.c.x-p.c0.x}px,${p.c.y-p.c0.y}px) scale(${p.s})`},{passive:false});
+function endPinch(e){if(!pinch||fingers(e).length>=2)return;const p=pinch;pinch=null;sheet.style.transform='';sheet.style.transformOrigin='';
+  if(Math.abs(p.s-1)<.01&&Math.hypot(p.c.x-p.c0.x,p.c.y-p.c0.y)<2)return;
+  state.fit=false;state.zoom=p.z0*p.s;sizeCanvases();drawMain();
+  const r=sheet.getBoundingClientRect();stage.scrollLeft+=r.left+p.px*state.zoom-p.c.x;stage.scrollTop+=r.top+p.py*state.zoom-p.c.y}
+stage.addEventListener('touchend',endPinch);stage.addEventListener('touchcancel',endPinch);
+/* Safari 標準のページ拡大は止める（紙だけを拡大縮小する） */
+document.addEventListener('gesturestart',e=>e.preventDefault());
 
 /* ---------- 元に戻す ---------- */
 function pushUndo(a){undoS.push(a);if(undoS.length>200)undoS.shift();redoS=[];updUndo()}
@@ -773,13 +801,16 @@ function stampTap(z,q,cx,cy,long){
   if(ex&&!long){const o={...ex,sel:!ex.sel},arr=strokes(z.id),i=arr.indexOf(ex);if(!o.sel)delete o.sel;
     if(i>=0){arr[i]=o;markDirty(z.id);pushUndo({op:'swap',id:z.id,a:ex,b:o});drawMain()}return}
   if(!ex&&y>=TOT0&&y<=TD0){toast('台数計の欄は自動で集計されます');return}
-  sp={z,x:Math.max(1,Math.min(x,z.zw-30)),y:Math.max(STH/2+1,y),ex,v:ex?{...ex.v}:{}};
+  sp={z,x:Math.max(1,Math.min(x,z.zw-30)),y:Math.max(STH/2+1,y),ex,v:ex?{...ex.v}:{},k:ex?kindOf(ex):'swap'};
   const d=parse(z.id.slice(5));$('#stampDay').textContent=`${d.getMonth()+1}/${d.getDate()}（${WD[d.getDay()]}）`;
-  $('#stampOk').textContent=ex?'更新':'置く';$('#stampDel').hidden=!ex;renderRows();
+  $('#stampOk').textContent=ex?'更新':'置く';$('#stampDel').hidden=!ex;renderKinds();renderRows();
   const bg=$('#stampBg'),card=$('#stampCard');bg.hidden=false;
   const W=card.offsetWidth,H=card.offsetHeight,vw=innerWidth,vh=innerHeight;
   card.style.left=Math.max(16,Math.min(cx+16,vw-W-16))+'px';card.style.top=Math.max(16,Math.min(cy-H/2,vh-H-16))+'px';
 }
+function renderKinds(){const box=$('#stampKinds');box.innerHTML='';
+  for(const[k,K]of Object.entries(KINDS)){const b=document.createElement('button');b.type='button';b.textContent=(K.sign?K.sign+' ':'')+K.lab;
+    b.style.color=K.fg;b.style.background=K.bg;b.setAttribute('aria-pressed',sp.k===k);b.onclick=()=>{sp.k=k;renderKinds()};box.appendChild(b)}}
 function renderRows(){const box=$('#stampRows');box.innerHTML='';
   for(const u of UNITS){const n=sp.v[u]||0,row=document.createElement('div');row.className='srow';
     row.innerHTML=`<b>${u}</b><button aria-label="${u}を1減らす">−</button><output class="${n?'':'zero'}">${n}</output><button aria-label="${u}を1増やす">＋</button>`;
@@ -790,7 +821,7 @@ $('#stampCancel').onclick=closeStamp;
 $('#stampDel').onclick=()=>{const{z,ex}=sp,arr=strokes(z.id),i=arr.indexOf(ex);if(i>=0){arr.splice(i,1);markDirty(z.id);pushUndo({op:'del',id:z.id,st:[ex]});drawMain()}closeStamp()};
 $('#stampOk').onclick=()=>{const{z,ex}=sp,v={};for(const u of UNITS)if(sp.v[u])v[u]=sp.v[u];const arr=strokes(z.id);
   if(!Object.keys(v).length){if(ex){const i=arr.indexOf(ex);if(i>=0){arr.splice(i,1);pushUndo({op:'del',id:z.id,st:[ex]})}}}
-  else{const o={t:'stamp',x:ex?ex.x:sp.x,y:ex?ex.y:sp.y,v,bw:+stampWidth(v).toFixed(2)};if(ex&&ex.sel)o.sel=true;
+  else{const o={t:'stamp',x:ex?ex.x:sp.x,y:ex?ex.y:sp.y,v,bw:+stampWidth(v,sp.k).toFixed(2)};if(sp.k!=='swap')o.k=sp.k;if(ex&&ex.sel)o.sel=true;
     if(ex){const i=arr.indexOf(ex);if(i>=0){arr[i]=o;pushUndo({op:'swap',id:z.id,a:ex,b:o})}}else{arr.push(o);pushUndo({op:'add',id:z.id,st:[o]})}}
   markDirty(z.id);drawMain();closeStamp()};
 
