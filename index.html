@@ -94,7 +94,19 @@ input,textarea,select{-webkit-user-select:text;user-select:text}
 .tstep{display:grid;grid-template-columns:34px 1fr 1fr 74px 1fr 1fr;align-items:center;gap:5px}
 .tstep .tl{font-size:12.5px;color:var(--muted);font-weight:500}
 .tstep button{min-height:44px;padding:0 2px;background:var(--chip);font-size:13px;font-weight:500;font-variant-numeric:tabular-nums}
-.tstep output{text-align:center;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;font-family:var(--font-num)}
+.tstep output{text-align:center;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;font-family:var(--font-num);cursor:pointer;border-radius:8px;padding:6px 0;background:var(--chip);text-decoration:underline dotted;text-underline-offset:4px}
+#clkBg{position:fixed;inset:0;z-index:18;background:rgba(15,20,30,.32);display:flex;align-items:center;justify-content:center;padding:16px}
+#clkCard{width:300px;max-width:100%;background:var(--bar);color:var(--fg);border:1px solid var(--line);border-radius:16px;box-shadow:0 14px 40px rgba(0,0,0,.28);padding:16px;display:flex;flex-direction:column;gap:12px;align-items:center}
+#clkCard .ttl{align-self:flex-start;font-size:13px;color:var(--muted);font-weight:500}
+.clkhead{display:flex;align-items:center;gap:4px;font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.clkhead button{font:inherit;font-size:40px;font-weight:700;line-height:1;padding:6px 10px;border-radius:10px;background:var(--chip);color:var(--muted);min-height:0}
+.clkhead button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.clkhead span{font-size:36px;font-weight:700}
+#clkDial{width:260px;height:260px;touch-action:none;-webkit-user-select:none;user-select:none}
+#clkDial text{font-family:var(--font-ui);font-variant-numeric:tabular-nums;pointer-events:none}
+.clkacts{display:flex;gap:8px;align-self:stretch}
+.clkacts button{flex:1;min-height:44px;background:var(--chip);font-weight:500}
+.clkacts .ok{background:var(--accent);color:var(--accent-ink)}
 .erow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .chk{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--fg)}
 .chk input{width:20px;height:20px;accent-color:var(--accent)}
@@ -221,6 +233,12 @@ input,textarea,select{-webkit-user-select:text;user-select:text}
   <p id="gMemo" hidden></p>
   <p class="enote">Googleカレンダーから取り込んだ予定です。この画面では編集・削除できません。</p>
   <div class="eacts"><button id="gClose" type="button" class="ok">閉じる</button></div>
+</div></div>
+<div id="clkBg" hidden><div id="clkCard" role="dialog" aria-label="時刻を選ぶ">
+  <div class="ttl" id="clkTtl">開始時刻</div>
+  <div class="clkhead"><button type="button" id="clkH" aria-pressed="true">09</button><span>:</span><button type="button" id="clkM" aria-pressed="false">00</button></div>
+  <svg id="clkDial" viewBox="0 0 260 260" aria-label="文字盤"></svg>
+  <div class="clkacts"><button type="button" id="clkCancel">キャンセル</button><button type="button" id="clkOk" class="ok">OK</button></div>
 </div></div>
 <div id="stampBg" hidden><div id="stampCard" role="dialog" aria-label="台数"><h3>台数<span id="stampDay"></span></h3><div class="stype" role="radiogroup" aria-label="種類"><button type="button" role="radio" data-k="set">設置のみ</button><button type="button" role="radio" data-k="kou">交換</button><button type="button" role="radio" data-k="hiki">引上のみ</button></div><div id="stampRows"></div>
 <div class="sacts"><button id="stampDel" class="danger">削除</button><button id="stampCancel">閉じる</button><button id="stampOk" class="ok">置く</button></div></div></div>
@@ -810,6 +828,41 @@ function stepTime(k,d){let s=tmin($('#evStart').value||'09:00'),e=tmin($('#evEnd
   if(k==='start'){s=Math.max(0,Math.min(24*60-15,s+d));e=Math.min(24*60-1,s+len)}else e=Math.max(s+15,Math.min(24*60-1,e+d));
   $('#evStart').value=tstr(s);$('#evEnd').value=tstr(e===24*60-1?24*60-1:e);showTimes()}
 document.querySelectorAll('.tstep').forEach(r=>r.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>stepTime(r.dataset.k,+b.dataset.d))));
+/* ---------- アナログ時計で時刻を選ぶ（Pixel と同じく、時→分の順） ----------
+   時：外側の輪＝12,1〜11、内側の輪＝0,13〜23。分：5分刻み。決まり（開始を動かすと長さを保って終了も動く／終了は開始＋15分以降）は stepTime と同じ */
+let clk=null;
+function setTime(k,v){let s=tmin($('#evStart').value||'09:00'),e=tmin($('#evEnd').value||'10:00');const len=e-s;
+  if(k==='start'){s=Math.max(0,Math.min(24*60-15,v));e=Math.min(24*60-1,s+len)}else e=Math.max(s+15,Math.min(24*60-1,v));
+  $('#evStart').value=tstr(s);$('#evEnd').value=tstr(e);showTimes()}
+function openClock(k){const v=tmin($(k==='start'?'#evStart':'#evEnd').value||(k==='start'?'09:00':'10:00'));
+  clk={k,h:Math.floor(v/60),m:Math.round(v%60/5)*5%60,mode:'h',drag:false};$('#clkTtl').textContent=k==='start'?'開始時刻':'終了時刻';$('#clkBg').hidden=false;drawClock()}
+function drawClock(){const C=130,R1=104,R2=68,svg=$('#clkDial'),ns='http://www.w3.org/2000/svg',cs=getComputedStyle(document.body);
+  const fg=cs.getPropertyValue('--fg').trim(),ac=cs.getPropertyValue('--accent').trim(),ai=cs.getPropertyValue('--accent-ink').trim(),ch=cs.getPropertyValue('--chip').trim();
+  $('#clkH').textContent=pad(clk.h);$('#clkM').textContent=pad(clk.m);$('#clkH').setAttribute('aria-pressed',clk.mode==='h');$('#clkM').setAttribute('aria-pressed',clk.mode==='m');
+  const pos=(i,r)=>{const a=(i/12)*Math.PI*2-Math.PI/2;return[C+r*Math.cos(a),C+r*Math.sin(a)]};
+  let sel,selR,html=`<circle cx="${C}" cy="${C}" r="126" fill="${ch}"/>`;
+  if(clk.mode==='h'){const inner=clk.h===0||clk.h>12;sel=clk.h%12;selR=inner?R2:R1}else{sel=clk.m/5;selR=R1}
+  const[sx,sy]=pos(sel,selR);
+  html+=`<line x1="${C}" y1="${C}" x2="${sx}" y2="${sy}" stroke="${ac}" stroke-width="2"/><circle cx="${C}" cy="${C}" r="4" fill="${ac}"/><circle cx="${sx}" cy="${sy}" r="19" fill="${ac}"/>`;
+  const label=(i,r,t,size,on)=>{const[x,y]=pos(i,r);return`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" font-size="${size}" font-weight="${on?700:500}" fill="${on?ai:fg}">${t}</text>`};
+  if(clk.mode==='h'){for(let i=0;i<12;i++){const ho=i===0?12:i,hi=i===0?0:i+12;
+      html+=label(i,R1,ho,16,clk.h===ho)+label(i,R2,pad(hi),13,clk.h===hi)}}
+  else for(let i=0;i<12;i++){const m=i*5;html+=label(i,R1,pad(m),15,clk.m===m)}
+  svg.innerHTML=html}
+function clockPick(e,end){const r=$('#clkDial').getBoundingClientRect(),x=(e.clientX-r.left)*260/r.width-130,y=(e.clientY-r.top)*260/r.height-130;
+  let a=Math.atan2(y,x)+Math.PI/2;if(a<0)a+=Math.PI*2;const d=Math.hypot(x,y);
+  if(clk.mode==='h'){const i=Math.round(a/(Math.PI*2)*12)%12;clk.h=d<86?(i===0?0:i+12):(i===0?12:i)}
+  else clk.m=(Math.round(a/(Math.PI*2)*12)%12)*5;
+  drawClock();if(end&&clk.mode==='h'){clk.mode='m';setTimeout(drawClock,180)}}
+$('#clkDial').addEventListener('pointerdown',e=>{if(!clk)return;e.preventDefault();clk.drag=true;try{$('#clkDial').setPointerCapture(e.pointerId)}catch(_){}clockPick(e,false)});
+$('#clkDial').addEventListener('pointermove',e=>{if(clk&&clk.drag)clockPick(e,false)});
+$('#clkDial').addEventListener('pointerup',e=>{if(clk&&clk.drag){clk.drag=false;clockPick(e,true)}});
+$('#clkDial').addEventListener('pointercancel',()=>{if(clk)clk.drag=false});
+$('#clkH').onclick=()=>{clk.mode='h';drawClock()};$('#clkM').onclick=()=>{clk.mode='m';drawClock()};
+$('#clkCancel').onclick=()=>{$('#clkBg').hidden=true;clk=null};
+$('#clkOk').onclick=()=>{setTime(clk.k,clk.h*60+clk.m);$('#clkBg').hidden=true;clk=null};
+$('#clkBg').addEventListener('click',e=>{if(e.target.id==='clkBg'){$('#clkBg').hidden=true;clk=null}});
+document.querySelectorAll('.tstep output').forEach(o=>{o.setAttribute('role','button');o.setAttribute('aria-label','時計で時刻を選ぶ');o.addEventListener('click',()=>openClock(o.closest('.tstep').dataset.k))});
 function renderEvCols(){const box=$('#evCols');box.innerHTML='';for(const col of EVCOL){const b=document.createElement('button');b.type='button';b.style.background=col;b.setAttribute('aria-label','色 '+col);b.setAttribute('aria-pressed',ed.color===col);b.onclick=()=>{ed.color=col;renderEvCols()};box.appendChild(b)}}
 function syncEvForm(){const all=$('#evAll').checked;$('#evTimes').hidden=all;$('#evEndDateL').style.visibility=all?'visible':'hidden';$('#evUntilL').style.visibility=$('#evRep').value==='none'?'hidden':'visible'}
 $('#evAll').addEventListener('change',syncEvForm);$('#evRep').addEventListener('change',syncEvForm);
