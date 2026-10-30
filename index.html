@@ -111,7 +111,7 @@ input,textarea,select{-webkit-user-select:text;user-select:text}
 #stampCard h3 span{font-size:12px;font-weight:500;color:var(--muted)}
 #stampCard{border-top:5px solid #3b6fb6}
 #stampCard.kou{border-top-color:#d07a1f}
-.stype{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:4px}
+.stype{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px}
 .stype button{min-height:46px;font-size:14px;padding:0 2px;white-space:nowrap;letter-spacing:-.02em;font-weight:700;border-radius:10px;background:var(--chip);color:var(--muted);border:2px solid transparent}
 .stype button[data-k="set"][aria-checked="true"]{background:#3b6fb6;color:#fff;border-color:#2a5592}
 .stype button[data-k="kou"][aria-checked="true"]{background:#d07a1f;color:#fff;border-color:#a85f12}
@@ -222,7 +222,7 @@ input,textarea,select{-webkit-user-select:text;user-select:text}
   <p class="enote">Googleカレンダーから取り込んだ予定です。この画面では編集・削除できません。</p>
   <div class="eacts"><button id="gClose" type="button" class="ok">閉じる</button></div>
 </div></div>
-<div id="stampBg" hidden><div id="stampCard" role="dialog" aria-label="台数"><h3>台数<span id="stampDay"></span></h3><div class="stype" role="radiogroup" aria-label="種類"><button type="button" role="radio" data-k="set">設置のみ</button><button type="button" role="radio" data-k="kou">交換</button><button type="button" role="radio" data-k="hiki">引上のみ</button></div><div id="stampRows"></div>
+<div id="stampBg" hidden><div id="stampCard" role="dialog" aria-label="台数"><h3>台数<span id="stampDay"></span></h3><div class="stype" role="radiogroup" aria-label="種類"><button type="button" role="radio" data-k="set">設置のみ</button><button type="button" role="radio" data-k="kou">交換</button></div><div id="stampRows"></div>
 <div class="sacts"><button id="stampDel" class="danger">削除</button><button id="stampCancel">閉じる</button><button id="stampOk" class="ok">置く</button></div></div></div>
 <div id="toast" hidden></div>
 
@@ -812,7 +812,7 @@ function stampTap(z,q,cx,cy,long){
   const s=z.r.w/z.zw,x=(q.x-z.r.x)/s,y=(q.y-z.r.y)/s;
   if(!z.id.startsWith('vday:')){toast('台数の札は日付の列に置けます');return}
   const ex=[...strokes(z.id)].reverse().find(o=>o.t==='stamp'&&hit(o,x,y,3/s));
-  if(ex&&!long){const nk={set:'kou',kou:'hiki',hiki:'set'}[kindOf(ex)],o={...ex,kind:nk},arr=strokes(z.id),i=arr.indexOf(ex);delete o.sel;toast(KINDS[nk].name,1200);
+  if(ex&&!long){const nk={set:'kou',kou:'set',hiki:'set'}[kindOf(ex)],o={...ex,kind:nk},arr=strokes(z.id),i=arr.indexOf(ex);delete o.sel;toast(KINDS[nk].name,1200);
     if(i>=0){arr[i]=o;markDirty(z.id);pushUndo({op:'swap',id:z.id,a:ex,b:o});drawMain()}return}
   if(!ex&&y>=TOT0){toast('台数の札は台数計より上の欄に置けます');return}
   sp={z,x:z.zw-30,y:snapStampY(Math.max(STH/2+1,y)),ex,v:ex?{...ex.v}:{},kind:ex?kindOf(ex):'set'};showType();
@@ -863,7 +863,7 @@ function updTools(){
   const sz=$('#sizes');sz.innerHTML='';sz.hidden=sz.previousElementSibling.hidden=t==='event';if(t==='event')return;if(t==='stamp'){sz.hidden=sz.previousElementSibling.hidden=true;return}['細','中','太'].forEach((lab,i)=>{const b=document.createElement('button');b.className='sz';b.setAttribute('aria-label',lab);b.setAttribute('aria-pressed',state.size[t]===i);
     const d=t==='pen'?[4,7,11][i]:[8,12,16][i];b.innerHTML=`<i style="width:${d}px;height:${d}px;${t==='eraser'?'background:transparent;border:1.5px solid currentColor':''}"></i>`;b.onclick=()=>{state.size[t]=i;savePrefs();updTools()};sz.appendChild(b)});
 }
-document.querySelectorAll('.tool').forEach(b=>b.addEventListener('click',()=>{state.tool=b.dataset.tool;updTools();if(state.tool==='event')toast('列をタップ：予定を追加（台数計の上にまとめて表示）／予定をタップ：編集',5000);if(state.tool==='stamp')toast('列をタップ：札を置く／札をタップ：設置のみ→交換→引上のみを切替／札を長押し：修正',5000)}));
+document.querySelectorAll('.tool').forEach(b=>b.addEventListener('click',()=>{state.tool=b.dataset.tool;updTools();if(state.tool==='event')toast('列をタップ：予定を追加（台数計の上にまとめて表示）／予定をタップ：編集',5000);if(state.tool==='stamp')toast('列をタップ：札を置く／札をタップ：設置のみ（青）⇔交換（オレンジ）を切替／札を長押し：修正',5000)}));
 $('#vWeek').onclick=()=>go('week');$('#vDay').onclick=()=>go('day');
 $('#vPdf').onclick=()=>{state.view='pdf';if(!state.pdfId)state.pdfId=pdfList[0]?.id||null;state.fit=true;render(true)};
 $('#prev').onclick=()=>step(-1);$('#next').onclick=()=>step(1);
