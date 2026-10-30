@@ -449,7 +449,7 @@ function stampWidth(v,k){measCtx.font=STF;return measCtx.measureText((k?KINDS[k]
 /* 札の色は種類と関係なく、青＝そのまま、薄い黄色＝タップした札（sel:true）。設置のみは頭に「＋」、引上のみは頭に「−」を付けて見分ける。緑は使わない */
 const KINDS={set:{name:'設置のみ',sign:'＋',tot:'#2f5fa3'},kou:{name:'交換',sign:'',tot:'#b4620f'},hiki:{name:'引上のみ',sign:'−',tot:'#2f5fa3'}};
 const STC={off:{fill:'#e2ebf7',line:'#7f9cc7',ink:'#1f3d6e',lw:.8},on:{fill:'#fff6bf',line:'#d8b93a',ink:'#5e4b00',lw:1.2}};
-const kindOf=s=>s.kind||(s.k==='out'?'hiki':s.k==='in'?'set':s.sel?'kou':'set');  // k:'in'|'out' は 10/30 の一時版の札
+const kindOf=s=>s.kind||(s.k==='out'?'hiki':s.k==='in'?'set':'kou');  // 種類のない古い札は交換として読む（k:'in'|'out' は 10/30 の一時版の札）
 function drawStamp(c,s){const w=s.bw,y=s.y-STH/2,k=STC[s.sel?'on':'off'];c.save();c.globalAlpha=1;c.globalCompositeOperation='source-over';
   c.fillStyle=k.fill;c.strokeStyle=k.line;c.lineWidth=k.lw;c.beginPath();c.roundRect?c.roundRect(s.x,y,w,STH,4):c.rect(s.x,y,w,STH);c.fill();c.stroke();
   c.fillStyle=k.ink;c.font=STF;c.textBaseline='middle';c.fillText(KINDS[kindOf(s)].sign+stampText(s.v),s.x+5,s.y+.5);c.restore()}
@@ -886,7 +886,7 @@ function stampTap(z,q,cx,cy,long){
   const s=z.r.w/z.zw,x=(q.x-z.r.x)/s,y=(q.y-z.r.y)/s;
   if(!z.id.startsWith('vday:')){toast('台数の札は日付の列に置けます');return}
   const ex=[...strokes(z.id)].reverse().find(o=>o.t==='stamp'&&hit(o,x,y,3/s));
-  if(ex&&!long){const o={...ex,kind:kindOf(ex)},arr=strokes(z.id),i=arr.indexOf(ex);if(ex.sel)delete o.sel;else o.sel=true;  // タップは色（青⇔オレンジ）だけ。種類は変えない
+  if(ex&&!long){const o={...ex},arr=strokes(z.id),i=arr.indexOf(ex);if(ex.sel)delete o.sel;else o.sel=true;  // タップは色（青⇔オレンジ）だけ。種類は変えない
     if(i>=0){arr[i]=o;markDirty(z.id);pushUndo({op:'swap',id:z.id,a:ex,b:o});drawMain()}return}
   if(!ex&&y>=TOT0){toast('台数の札は台数計より上の欄に置けます');return}
   sp={z,x:z.zw-30,y:snapStampY(Math.max(STH/2+1,y),rowGap(z.zw)),ex,v:ex?{...ex.v}:{},kind:ex?kindOf(ex):'kou'};showType();
