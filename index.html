@@ -428,15 +428,15 @@ const STF=`700 9.5px ${FS}`,STH=14;
 const measCtx=document.createElement('canvas').getContext('2d');
 function stampWidth(v,k){measCtx.font=STF;return measCtx.measureText((k?KINDS[k].sign:'')+stampText(v)).width+10}
 /* 札の種類：set＝設置のみ（青）、kou＝交換（オレンジ）、hiki＝引上のみ（緑）。古い札の sel:true は交換として扱う */
-/* 札の色は種類と関係なく、青＝そのまま、オレンジ＝タップした札（sel:true）。設置のみは頭に「＋」、引上のみは頭に「−」を付けて見分ける。緑は使わない */
+/* 札の色は種類と関係なく、青＝そのまま、薄い黄色＝タップした札（sel:true）。設置のみは頭に「＋」、引上のみは頭に「−」を付けて見分ける。緑は使わない */
 const KINDS={set:{name:'設置のみ',sign:'＋',tot:'#2f5fa3'},kou:{name:'交換',sign:'',tot:'#b4620f'},hiki:{name:'引上のみ',sign:'−',tot:'#2f5fa3'}};
-const STC={off:{fill:'#e2ebf7',line:'#7f9cc7',ink:'#1f3d6e',lw:.8},on:{fill:'#fde3c4',line:'#d9822b',ink:'#7a3f06',lw:1.2}};
+const STC={off:{fill:'#e2ebf7',line:'#7f9cc7',ink:'#1f3d6e',lw:.8},on:{fill:'#fff6bf',line:'#d8b93a',ink:'#5e4b00',lw:1.2}};
 const kindOf=s=>s.kind||(s.k==='out'?'hiki':s.k==='in'?'set':s.sel?'kou':'set');  // k:'in'|'out' は 10/30 の一時版の札
 function drawStamp(c,s){const w=s.bw,y=s.y-STH/2,k=STC[s.sel?'on':'off'];c.save();c.globalAlpha=1;c.globalCompositeOperation='source-over';
   c.fillStyle=k.fill;c.strokeStyle=k.line;c.lineWidth=k.lw;c.beginPath();c.roundRect?c.roundRect(s.x,y,w,STH,4):c.rect(s.x,y,w,STH);c.fill();c.stroke();
   c.fillStyle=k.ink;c.font=STF;c.textBaseline='middle';c.fillText(KINDS[kindOf(s)].sign+stampText(s.v),s.x+5,s.y+.5);c.restore()}
-/* 台数計：1段目＝その日の全体（黒）、2段目＝タップしてオレンジにした札の合計（オレンジ）、3段目＝それ以外の札の合計（青）。
-   2・3段目はオレンジの札が1枚でもあるときだけ出す。各段とも種類ごとに分け、札と同じ記号を付ける（交換＝なし → 引上のみ＝− → 設置のみ＝＋） */
+/* 台数計：1段目＝その日の全体（黒）、2段目＝タップした札の合計（濃い黄色）、3段目＝それ以外の札の合計（緑）。
+   2・3段目はタップした札が1枚でもあるときだけ出す。各段とも種類ごとに分け、札と同じ記号を付ける（交換＝なし → 引上のみ＝− → 設置のみ＝＋） */
 function drawTotals(c,r,zw,list){const sum={kou:{},hiki:{},set:{}},sel={kou:{},hiki:{},set:{}};let any=false;
   for(const s of list)if(s.t==='stamp'){const k=kindOf(s);for(const u of UNITS){const n=s.v[u]||0;sum[k][u]=(sum[k][u]||0)+n;if(s.sel){sel[k][u]=(sel[k][u]||0)+n;any=true}}}
   const sc=r.w/zw;c.save();c.translate(r.x,r.y);c.scale(sc,sc);c.textBaseline='alphabetic';
@@ -445,7 +445,7 @@ function drawTotals(c,r,zw,list){const sum={kou:{},hiki:{},set:{}},sel={kou:{},h
   if(!all.length){c.fillStyle=RULE_STRONG;c.font=`500 10px ${FS}`;c.fillText('—',8,TOT0+44);c.restore();return}
   const groups=[{p:all,col:INK}];
   if(any){const rest={kou:{},hiki:{},set:{}};for(const k in rest)for(const u of UNITS)rest[k][u]=(sum[k][u]||0)-(sel[k][u]||0);
-    groups.push({p:tok(sel),col:'#b4620f'},{p:tok(rest).length?tok(rest):['0'],col:'#2f5fa3'})}
+    groups.push({p:tok(sel),col:'#9a7b00'},{p:tok(rest).length?tok(rest):['0'],col:'#2f7d55'})}
   let L=[];
   for(const[fs,sep]of[[15,'  '],[13.5,' '],[12,' '],[10.5,' ']]){c.font=`700 ${fs}px ${FS}`;L=[];
     for(const g of groups){let l=null;for(const p of g.p){const s=l==null?p:l+sep+p;if(l!=null&&c.measureText(s).width>zw-10){L.push({s:l,col:g.col});l=p}else l=s}L.push({s:l,col:g.col})}
@@ -867,7 +867,7 @@ function updTools(){
   const sz=$('#sizes');sz.innerHTML='';sz.hidden=sz.previousElementSibling.hidden=t==='event';if(t==='event')return;if(t==='stamp'){sz.hidden=sz.previousElementSibling.hidden=true;return}['細','中','太'].forEach((lab,i)=>{const b=document.createElement('button');b.className='sz';b.setAttribute('aria-label',lab);b.setAttribute('aria-pressed',state.size[t]===i);
     const d=t==='pen'?[4,7,11][i]:[8,12,16][i];b.innerHTML=`<i style="width:${d}px;height:${d}px;${t==='eraser'?'background:transparent;border:1.5px solid currentColor':''}"></i>`;b.onclick=()=>{state.size[t]=i;savePrefs();updTools()};sz.appendChild(b)});
 }
-document.querySelectorAll('.tool').forEach(b=>b.addEventListener('click',()=>{state.tool=b.dataset.tool;updTools();if(state.tool==='event')toast('列をタップ：予定を追加（台数計の上にまとめて表示）／予定をタップ：編集',5000);if(state.tool==='stamp')toast('列をタップ：札を置く／札をタップ：色を切替（青⇔オレンジ）／札を長押し：修正',5000)}));
+document.querySelectorAll('.tool').forEach(b=>b.addEventListener('click',()=>{state.tool=b.dataset.tool;updTools();if(state.tool==='event')toast('列をタップ：予定を追加（台数計の上にまとめて表示）／予定をタップ：編集',5000);if(state.tool==='stamp')toast('列をタップ：札を置く／札をタップ：色を切替（青⇔黄）／札を長押し：修正',5000)}));
 $('#vWeek').onclick=()=>go('week');$('#vDay').onclick=()=>go('day');
 $('#vPdf').onclick=()=>{state.view='pdf';if(!state.pdfId)state.pdfId=pdfList[0]?.id||null;state.fit=true;render(true)};
 $('#prev').onclick=()=>step(-1);$('#next').onclick=()=>step(1);
