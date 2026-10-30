@@ -111,12 +111,12 @@ input,textarea,select{-webkit-user-select:text;user-select:text}
 #stampCard h3 span{font-size:12px;font-weight:500;color:var(--muted)}
 #stampCard{border-top:5px solid #3b6fb6}
 #stampCard.kou{border-top-color:#d07a1f}
-.stype{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px}
+.stype{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:4px}
 .stype button{min-height:46px;font-size:14px;padding:0 2px;white-space:nowrap;letter-spacing:-.02em;font-weight:700;border-radius:10px;background:var(--chip);color:var(--muted);border:2px solid transparent}
 .stype button[data-k="set"][aria-checked="true"]{background:#3b6fb6;color:#fff;border-color:#2a5592}
 .stype button[data-k="kou"][aria-checked="true"]{background:#d07a1f;color:#fff;border-color:#a85f12}
-.stype button[data-k="hiki"][aria-checked="true"]{background:#2f8a5b;color:#fff;border-color:#226b45}
-#stampCard.hiki{border-top-color:#2f8a5b}
+.stype button[data-k="hiki"][aria-checked="true"]{background:#3b6fb6;color:#fff;border-color:#2a5592}
+#stampCard.hiki{border-top-color:#3b6fb6}
 .stype button[aria-checked="true"]::before{content:"✓ "}
 .srow{display:grid;grid-template-columns:44px 44px 1fr 44px;align-items:center;gap:6px}
 .srow b{font-size:15px;font-family:var(--font-num)}
@@ -222,7 +222,7 @@ input,textarea,select{-webkit-user-select:text;user-select:text}
   <p class="enote">Googleカレンダーから取り込んだ予定です。この画面では編集・削除できません。</p>
   <div class="eacts"><button id="gClose" type="button" class="ok">閉じる</button></div>
 </div></div>
-<div id="stampBg" hidden><div id="stampCard" role="dialog" aria-label="台数"><h3>台数<span id="stampDay"></span></h3><div class="stype" role="radiogroup" aria-label="種類"><button type="button" role="radio" data-k="set">設置のみ</button><button type="button" role="radio" data-k="kou">交換</button></div><div id="stampRows"></div>
+<div id="stampBg" hidden><div id="stampCard" role="dialog" aria-label="台数"><h3>台数<span id="stampDay"></span></h3><div class="stype" role="radiogroup" aria-label="種類"><button type="button" role="radio" data-k="set">設置のみ</button><button type="button" role="radio" data-k="kou">交換</button><button type="button" role="radio" data-k="hiki">引上のみ</button></div><div id="stampRows"></div>
 <div class="sacts"><button id="stampDel" class="danger">削除</button><button id="stampCancel">閉じる</button><button id="stampOk" class="ok">置く</button></div></div></div>
 <div id="toast" hidden></div>
 
@@ -426,13 +426,15 @@ const cv=$('#cv'),ov=$('#ov'),ctx=cv.getContext('2d'),octx=ov.getContext('2d'),s
 const stampText=v=>UNITS.filter(u=>v[u]).map(u=>u+v[u]).join('・');
 const STF=`700 9.5px ${FS}`,STH=14;
 const measCtx=document.createElement('canvas').getContext('2d');
-function stampWidth(v){measCtx.font=STF;return measCtx.measureText(stampText(v)).width+10}
+function stampWidth(v,k){measCtx.font=STF;return measCtx.measureText((k?KINDS[k].sign:'')+stampText(v)).width+10}
 /* 札の種類：set＝設置のみ（青）、kou＝交換（オレンジ）、hiki＝引上のみ（緑）。古い札の sel:true は交換として扱う */
-const KINDS={set:{name:'設置のみ',fill:'#e2ebf7',line:'#7f9cc7',ink:'#1f3d6e',tot:'#2f5fa3'},kou:{name:'交換',fill:'#fde3c4',line:'#d9822b',ink:'#7a3f06',tot:'#b4620f'},hiki:{name:'引上のみ',fill:'#d9efe1',line:'#4f9a6c',ink:'#1d5536',tot:'#2f7d55'}};
+/* 札の色は種類と関係なく、青＝そのまま、オレンジ＝タップした札（sel:true）。引上のみは頭に「−」を付けて見分ける。緑は使わない */
+const KINDS={set:{name:'設置のみ',sign:'',tot:'#2f5fa3'},kou:{name:'交換',sign:'',tot:'#b4620f'},hiki:{name:'引上のみ',sign:'−',tot:'#2f5fa3'}};
+const STC={off:{fill:'#e2ebf7',line:'#7f9cc7',ink:'#1f3d6e',lw:.8},on:{fill:'#fde3c4',line:'#d9822b',ink:'#7a3f06',lw:1.2}};
 const kindOf=s=>s.kind||(s.k==='out'?'hiki':s.k==='in'?'set':s.sel?'kou':'set');  // k:'in'|'out' は 10/30 の一時版の札
-function drawStamp(c,s){const w=s.bw,y=s.y-STH/2,k=KINDS[kindOf(s)];c.save();c.globalAlpha=1;c.globalCompositeOperation='source-over';
-  c.fillStyle=k.fill;c.strokeStyle=k.line;c.lineWidth=kindOf(s)==='set'?.8:1.2;c.beginPath();c.roundRect?c.roundRect(s.x,y,w,STH,4):c.rect(s.x,y,w,STH);c.fill();c.stroke();
-  c.fillStyle=k.ink;c.font=STF;c.textBaseline='middle';c.fillText(stampText(s.v),s.x+5,s.y+.5);c.restore()}
+function drawStamp(c,s){const w=s.bw,y=s.y-STH/2,k=STC[s.sel?'on':'off'];c.save();c.globalAlpha=1;c.globalCompositeOperation='source-over';
+  c.fillStyle=k.fill;c.strokeStyle=k.line;c.lineWidth=k.lw;c.beginPath();c.roundRect?c.roundRect(s.x,y,w,STH,4):c.rect(s.x,y,w,STH);c.fill();c.stroke();
+  c.fillStyle=k.ink;c.font=STF;c.textBaseline='middle';c.fillText(KINDS[kindOf(s)].sign+stampText(s.v),s.x+5,s.y+.5);c.restore()}
 /* 台数計：1段目＝全体（黒）。設置のみ以外の札がある日は、その下に種類ごとの合計を札と同じ色で出す（交換→引上のみ→設置のみ） */
 function drawTotals(c,r,zw,list){const sum={},by={set:{},kou:{},hiki:{}};
   for(const s of list)if(s.t==='stamp'){const k=kindOf(s);for(const u of UNITS){const n=s.v[u]||0;sum[u]=(sum[u]||0)+n;by[k][u]=(by[k][u]||0)+n}}
@@ -441,7 +443,7 @@ function drawTotals(c,r,zw,list){const sum={},by={set:{},kou:{},hiki:{}};
   const all=tok(sum);
   if(!all.length){c.fillStyle=RULE_STRONG;c.font=`500 10px ${FS}`;c.fillText('—',8,TOT0+44);c.restore();return}
   const groups=[{p:all,col:INK}];
-  if(tok(by.kou).length||tok(by.hiki).length)for(const k of['kou','hiki','set'])if(tok(by[k]).length)groups.push({p:tok(by[k]),col:KINDS[k].tot});
+  if(tok(by.kou).length||tok(by.hiki).length)for(const k of['kou','hiki','set'])if(tok(by[k]).length)groups.push({p:tok(by[k]).map(t=>KINDS[k].sign+t),col:KINDS[k].tot});
   let L=[];
   for(const[fs,sep]of[[15,'  '],[13.5,' '],[12,' '],[10.5,' ']]){c.font=`700 ${fs}px ${FS}`;L=[];
     for(const g of groups){let l=null;for(const p of g.p){const s=l==null?p:l+sep+p;if(l!=null&&c.measureText(s).width>zw-10){L.push({s:l,col:g.col});l=p}else l=s}L.push({s:l,col:g.col})}
@@ -469,7 +471,7 @@ function drawStroke(c,s){
 function snapStampY(y){const g=HH/2,bot=y<ALLD?ALLD:Math.min(TOT0,T0+Math.max(1,Math.ceil((y-T0)/g))*g);return+(bot-STH/2-2).toFixed(2)}
 function layoutStamps(list,zw){const rows=new Map();
   for(const s of list){if(s.t!=='stamp')continue;s.y=snapStampY(s.y);const k=s.y.toFixed(1);if(!rows.has(k))rows.set(k,[]);rows.get(k).push(s)}
-  for(const row of rows.values()){let x=zw-3;for(const s of row){x-=s.bw;s.x=Math.max(1,x);x-=2}}}
+  for(const row of rows.values()){let x=zw-3;for(const s of row){s.bw=+stampWidth(s.v,kindOf(s)).toFixed(2);x-=s.bw;s.x=Math.max(1,x);x-=2}}}
 function drawZone(c,z,list){if(z.id&&z.id.startsWith('vday:'))layoutStamps(list,z.zw);const s=z.r.w/z.zw;c.save();c.beginPath();c.rect(z.r.x,z.r.y,z.r.w,z.r.h);c.clip();c.translate(z.r.x,z.r.y);c.scale(s,s);for(const st of list)drawStroke(c,st);c.restore()}
 function drawMain(){if(!cur)return;ctx.setTransform(K,0,0,K,0,0);ctx.globalCompositeOperation='source-over';ctx.fillStyle=PAPER;ctx.fillRect(0,0,cur.w,cur.h);
   cur.bg(ctx);if(cur.ev)cur.ev(ctx);for(const z of cur.zones)drawZone(ctx,z,strokes(z.id));if(cur.fg)cur.fg(ctx)}
@@ -812,10 +814,10 @@ function stampTap(z,q,cx,cy,long){
   const s=z.r.w/z.zw,x=(q.x-z.r.x)/s,y=(q.y-z.r.y)/s;
   if(!z.id.startsWith('vday:')){toast('台数の札は日付の列に置けます');return}
   const ex=[...strokes(z.id)].reverse().find(o=>o.t==='stamp'&&hit(o,x,y,3/s));
-  if(ex&&!long){const nk={set:'kou',kou:'set',hiki:'set'}[kindOf(ex)],o={...ex,kind:nk},arr=strokes(z.id),i=arr.indexOf(ex);delete o.sel;toast(KINDS[nk].name,1200);
+  if(ex&&!long){const o={...ex,kind:kindOf(ex)},arr=strokes(z.id),i=arr.indexOf(ex);if(ex.sel)delete o.sel;else o.sel=true;  // タップは色（青⇔オレンジ）だけ。種類は変えない
     if(i>=0){arr[i]=o;markDirty(z.id);pushUndo({op:'swap',id:z.id,a:ex,b:o});drawMain()}return}
   if(!ex&&y>=TOT0){toast('台数の札は台数計より上の欄に置けます');return}
-  sp={z,x:z.zw-30,y:snapStampY(Math.max(STH/2+1,y)),ex,v:ex?{...ex.v}:{},kind:ex?kindOf(ex):'set'};showType();
+  sp={z,x:z.zw-30,y:snapStampY(Math.max(STH/2+1,y)),ex,v:ex?{...ex.v}:{},kind:ex?kindOf(ex):'kou'};showType();
   const d=parse(z.id.slice(5));$('#stampDay').textContent=`${d.getMonth()+1}/${d.getDate()}（${WD[d.getDay()]}）`;
   $('#stampOk').textContent=ex?'更新':'置く';$('#stampDel').hidden=!ex;renderRows();
   const bg=$('#stampBg'),card=$('#stampCard');bg.hidden=false;
@@ -834,7 +836,7 @@ $('#stampCancel').onclick=closeStamp;
 $('#stampDel').onclick=()=>{const{z,ex}=sp,arr=strokes(z.id),i=arr.indexOf(ex);if(i>=0){arr.splice(i,1);markDirty(z.id);pushUndo({op:'del',id:z.id,st:[ex]});drawMain()}closeStamp()};
 $('#stampOk').onclick=()=>{const{z,ex}=sp,v={};for(const u of UNITS)if(sp.v[u])v[u]=sp.v[u];const arr=strokes(z.id);
   if(!Object.keys(v).length){if(ex){const i=arr.indexOf(ex);if(i>=0){arr.splice(i,1);pushUndo({op:'del',id:z.id,st:[ex]})}}}
-  else{const o={t:'stamp',x:ex?ex.x:sp.x,y:ex?ex.y:sp.y,v,bw:+stampWidth(v).toFixed(2),kind:sp.kind};
+  else{const o={t:'stamp',x:ex?ex.x:sp.x,y:ex?ex.y:sp.y,v,bw:+stampWidth(v,sp.kind).toFixed(2),kind:sp.kind};if(ex&&ex.sel)o.sel=true;
     if(ex){const i=arr.indexOf(ex);if(i>=0){arr[i]=o;pushUndo({op:'swap',id:z.id,a:ex,b:o})}}else{arr.push(o);pushUndo({op:'add',id:z.id,st:[o]})}}
   markDirty(z.id);drawMain();closeStamp()};
 
@@ -863,7 +865,7 @@ function updTools(){
   const sz=$('#sizes');sz.innerHTML='';sz.hidden=sz.previousElementSibling.hidden=t==='event';if(t==='event')return;if(t==='stamp'){sz.hidden=sz.previousElementSibling.hidden=true;return}['細','中','太'].forEach((lab,i)=>{const b=document.createElement('button');b.className='sz';b.setAttribute('aria-label',lab);b.setAttribute('aria-pressed',state.size[t]===i);
     const d=t==='pen'?[4,7,11][i]:[8,12,16][i];b.innerHTML=`<i style="width:${d}px;height:${d}px;${t==='eraser'?'background:transparent;border:1.5px solid currentColor':''}"></i>`;b.onclick=()=>{state.size[t]=i;savePrefs();updTools()};sz.appendChild(b)});
 }
-document.querySelectorAll('.tool').forEach(b=>b.addEventListener('click',()=>{state.tool=b.dataset.tool;updTools();if(state.tool==='event')toast('列をタップ：予定を追加（台数計の上にまとめて表示）／予定をタップ：編集',5000);if(state.tool==='stamp')toast('列をタップ：札を置く／札をタップ：設置のみ（青）⇔交換（オレンジ）を切替／札を長押し：修正',5000)}));
+document.querySelectorAll('.tool').forEach(b=>b.addEventListener('click',()=>{state.tool=b.dataset.tool;updTools();if(state.tool==='event')toast('列をタップ：予定を追加（台数計の上にまとめて表示）／予定をタップ：編集',5000);if(state.tool==='stamp')toast('列をタップ：札を置く／札をタップ：色を切替（青⇔オレンジ）／札を長押し：修正',5000)}));
 $('#vWeek').onclick=()=>go('week');$('#vDay').onclick=()=>go('day');
 $('#vPdf').onclick=()=>{state.view='pdf';if(!state.pdfId)state.pdfId=pdfList[0]?.id||null;state.fit=true;render(true)};
 $('#prev').onclick=()=>step(-1);$('#next').onclick=()=>step(1);
