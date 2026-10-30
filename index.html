@@ -109,9 +109,15 @@ input,textarea,select{-webkit-user-select:text;user-select:text}
 #stampCard{position:fixed;width:min(280px,calc(100vw - 32px));background:var(--bar);color:var(--fg);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.22);padding:12px;display:flex;flex-direction:column;gap:6px}
 #stampCard h3{margin:0 0 4px;font-size:14px;font-weight:700;display:flex;justify-content:space-between;align-items:baseline}
 #stampCard h3 span{font-size:12px;font-weight:500;color:var(--muted)}
-.skinds{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:4px}
-.skinds button{min-height:38px;background:var(--chip);font-size:13px;font-weight:500;border:1.5px solid transparent;padding:0 2px}
-.skinds button[aria-pressed="true"]{font-weight:700;border-color:currentColor}
+#stampCard{border-top:5px solid #3b6fb6}
+#stampCard.kou{border-top-color:#d07a1f}
+.stype{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:4px}
+.stype button{min-height:46px;font-size:14px;padding:0 2px;white-space:nowrap;letter-spacing:-.02em;font-weight:700;border-radius:10px;background:var(--chip);color:var(--muted);border:2px solid transparent}
+.stype button[data-k="set"][aria-checked="true"]{background:#3b6fb6;color:#fff;border-color:#2a5592}
+.stype button[data-k="kou"][aria-checked="true"]{background:#d07a1f;color:#fff;border-color:#a85f12}
+.stype button[data-k="hiki"][aria-checked="true"]{background:#2f8a5b;color:#fff;border-color:#226b45}
+#stampCard.hiki{border-top-color:#2f8a5b}
+.stype button[aria-checked="true"]::before{content:"✓ "}
 .srow{display:grid;grid-template-columns:44px 44px 1fr 44px;align-items:center;gap:6px}
 .srow b{font-size:15px;font-family:var(--font-num)}
 .srow output{text-align:center;font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
@@ -169,10 +175,14 @@ input,textarea,select{-webkit-user-select:text;user-select:text}
     <div id="menu" hidden>
       <button id="fingerBtn" role="switch" aria-checked="false">指でも書く<span class="switch"></span></button>
       <div class="note">オフのとき、指はスクロール専用です。Apple Pencil・マウスで書けます。</div>
+      <button id="scribBtn" role="switch" aria-checked="true">ぐちゃぐちゃで消す<span class="switch"></span></button>
+      <div class="note">ペンで上をぐちゃぐちゃ書くと、重なった線や台数の札が消えます。</div>
+      <div class="note">オフのとき、指はスクロール専用です。Apple Pencil・マウスで書けます。</div>
       <hr>
       <button id="exportBtn">バックアップを書き出す</button>
       <label class="btn" id="importLbl">バックアップから復元<input id="importFile" class="vis" type="file" accept="application/json,.json"></label>
       <div class="note" id="storeNote">この端末のブラウザ内に自動保存しています。</div>
+      <div class="note" id="verNote">版：—</div>
       <hr>
       <button id="gSyncBtn">Googleカレンダーを同期</button>
       <div class="note" id="gNote">読み取りのみです。アプリから Google には書き込みません。</div>
@@ -212,7 +222,7 @@ input,textarea,select{-webkit-user-select:text;user-select:text}
   <p class="enote">Googleカレンダーから取り込んだ予定です。この画面では編集・削除できません。</p>
   <div class="eacts"><button id="gClose" type="button" class="ok">閉じる</button></div>
 </div></div>
-<div id="stampBg" hidden><div id="stampCard" role="dialog" aria-label="台数"><h3>台数<span id="stampDay"></span></h3><div id="stampKinds" class="skinds"></div><div id="stampRows"></div>
+<div id="stampBg" hidden><div id="stampCard" role="dialog" aria-label="台数"><h3>台数<span id="stampDay"></span></h3><div class="stype" role="radiogroup" aria-label="種類"><button type="button" role="radio" data-k="set">設置のみ</button><button type="button" role="radio" data-k="kou">交換</button><button type="button" role="radio" data-k="hiki">引上のみ</button></div><div id="stampRows"></div>
 <div class="sacts"><button id="stampDel" class="danger">削除</button><button id="stampCancel">閉じる</button><button id="stampOk" class="ok">置く</button></div></div></div>
 <div id="toast" hidden></div>
 
@@ -280,8 +290,8 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)flush()});
 const prefs=(()=>{try{return JSON.parse(localStorage.getItem('tegaki-prefs'))||{}}catch(e){return{}}})();
 const state={view:prefs.view==='day'?'day':'week',date:ymd(new Date()),pdfId:null,pdfPage:0,
   tool:'pen',color:{pen:COLORS.pen[0],hl:COLORS.hl[0],...(prefs.color||{})},size:{pen:1,hl:1,eraser:1,...(prefs.size||{})},
-  finger:!!prefs.finger,zoom:1,fit:true};
-function savePrefs(){try{localStorage.setItem('tegaki-prefs',JSON.stringify({view:state.view==='pdf'?'week':state.view,color:state.color,size:state.size,finger:state.finger}))}catch(e){}}
+  finger:!!prefs.finger,scrib:prefs.scrib!==false,zoom:1,fit:true};
+function savePrefs(){try{localStorage.setItem('tegaki-prefs',JSON.stringify({view:state.view==='pdf'?'week':state.view,color:state.color,size:state.size,finger:state.finger,scrib:state.scrib}))}catch(e){}}
 let pdfList=[]; const pdfDocs=new Map(), bmpCache=new Map(), pdfLinks=new Map();
 let cur=null, K=1, undoS=[], redoS=[];
 
@@ -413,27 +423,25 @@ function pdfPageDef(){
 /* ---------- 描画 ---------- */
 const cv=$('#cv'),ov=$('#ov'),ctx=cv.getContext('2d'),octx=ov.getContext('2d'),sheet=$('#sheet'),stage=$('#stage');
 /* 台数の札 */
-const KINDS={swap:{sign:'',lab:'交換',bg:'#e2ebf7',bd:'#7f9cc7',fg:'#1f3d6e'},in:{sign:'＋',lab:'設置のみ',bg:'#e1f2e6',bd:'#62a77c',fg:'#1d5a35'},out:{sign:'−',lab:'引上のみ',bg:'#f8e3e1',bd:'#c97870',fg:'#7a2620'}};
-const kindOf=s=>s.k==='in'||s.k==='out'?s.k:'swap';
-const stampText=(v,k='swap')=>KINDS[k].sign+UNITS.filter(u=>v[u]).map(u=>u+v[u]).join('・');
+const stampText=v=>UNITS.filter(u=>v[u]).map(u=>u+v[u]).join('・');
 const STF=`700 9.5px ${FS}`,STH=14;
 const measCtx=document.createElement('canvas').getContext('2d');
-function stampWidth(v,k){measCtx.font=STF;return measCtx.measureText(stampText(v,k)).width+10}
-function drawStamp(c,s){const w=s.bw,y=s.y-STH/2;c.save();c.globalAlpha=1;c.globalCompositeOperation='source-over';
-  const kd=KINDS[kindOf(s)];
-  c.fillStyle=s.sel?'#fde3c4':kd.bg;c.strokeStyle=s.sel?'#d9822b':kd.bd;c.lineWidth=s.sel?1.2:.8;c.beginPath();c.roundRect?c.roundRect(s.x,y,w,STH,4):c.rect(s.x,y,w,STH);c.fill();c.stroke();
-  c.fillStyle=s.sel?'#7a3f06':kd.fg;c.font=STF;c.textBaseline='middle';c.fillText(stampText(s.v,kindOf(s)),s.x+5,s.y+.5);c.restore()}
-/* 台数計：1段目＝全体（黒）、2段目＝選択した札（オレンジ）、3段目＝全体−選択（緑）。
-   各段は種類別に数える（記号なし＝交換、＋＝設置のみ、−＝引上のみ） */
-function drawTotals(c,r,zw,list){const sum={swap:{},in:{},out:{}},sel={swap:{},in:{},out:{}};let any=false;
-  for(const s of list)if(s.t==='stamp'){const k=kindOf(s);for(const u of UNITS){const n=s.v[u]||0;sum[k][u]=(sum[k][u]||0)+n;if(s.sel){sel[k][u]=(sel[k][u]||0)+n;any=true}}}
+function stampWidth(v){measCtx.font=STF;return measCtx.measureText(stampText(v)).width+10}
+/* 札の種類：set＝設置のみ（青）、kou＝交換（オレンジ）、hiki＝引上のみ（緑）。古い札の sel:true は交換として扱う */
+const KINDS={set:{name:'設置のみ',fill:'#e2ebf7',line:'#7f9cc7',ink:'#1f3d6e',tot:'#2f5fa3'},kou:{name:'交換',fill:'#fde3c4',line:'#d9822b',ink:'#7a3f06',tot:'#b4620f'},hiki:{name:'引上のみ',fill:'#d9efe1',line:'#4f9a6c',ink:'#1d5536',tot:'#2f7d55'}};
+const kindOf=s=>s.kind||(s.k==='out'?'hiki':s.k==='in'?'set':s.sel?'kou':'set');  // k:'in'|'out' は 10/30 の一時版の札
+function drawStamp(c,s){const w=s.bw,y=s.y-STH/2,k=KINDS[kindOf(s)];c.save();c.globalAlpha=1;c.globalCompositeOperation='source-over';
+  c.fillStyle=k.fill;c.strokeStyle=k.line;c.lineWidth=kindOf(s)==='set'?.8:1.2;c.beginPath();c.roundRect?c.roundRect(s.x,y,w,STH,4):c.rect(s.x,y,w,STH);c.fill();c.stroke();
+  c.fillStyle=k.ink;c.font=STF;c.textBaseline='middle';c.fillText(stampText(s.v),s.x+5,s.y+.5);c.restore()}
+/* 台数計：1段目＝全体（黒）。設置のみ以外の札がある日は、その下に種類ごとの合計を札と同じ色で出す（交換→引上のみ→設置のみ） */
+function drawTotals(c,r,zw,list){const sum={},by={set:{},kou:{},hiki:{}};
+  for(const s of list)if(s.t==='stamp'){const k=kindOf(s);for(const u of UNITS){const n=s.v[u]||0;sum[u]=(sum[u]||0)+n;by[k][u]=(by[k][u]||0)+n}}
   const sc=r.w/zw;c.save();c.translate(r.x,r.y);c.scale(sc,sc);c.textBaseline='alphabetic';
-  const tok=o=>Object.keys(KINDS).flatMap(k=>UNITS.filter(u=>o[k][u]).map(u=>KINDS[k].sign+u+o[k][u]));
+  const tok=o=>UNITS.filter(u=>o[u]).map(u=>u+o[u]);
   const all=tok(sum);
   if(!all.length){c.fillStyle=RULE_STRONG;c.font=`500 10px ${FS}`;c.fillText('—',8,TOT0+44);c.restore();return}
   const groups=[{p:all,col:INK}];
-  if(any){const rest={swap:{},in:{},out:{}};for(const k in rest)for(const u of UNITS)rest[k][u]=(sum[k][u]||0)-(sel[k][u]||0);
-    groups.push({p:tok(sel),col:'#b4620f'},{p:tok(rest).length?tok(rest):['0'],col:'#2f7d55'})}
+  if(tok(by.kou).length||tok(by.hiki).length)for(const k of['kou','hiki','set'])if(tok(by[k]).length)groups.push({p:tok(by[k]),col:KINDS[k].tot});
   let L=[];
   for(const[fs,sep]of[[15,'  '],[13.5,' '],[12,' '],[10.5,' ']]){c.font=`700 ${fs}px ${FS}`;L=[];
     for(const g of groups){let l=null;for(const p of g.p){const s=l==null?p:l+sep+p;if(l!=null&&c.measureText(s).width>zw-10){L.push({s:l,col:g.col});l=p}else l=s}L.push({s:l,col:g.col})}
@@ -457,7 +465,12 @@ function drawStroke(c,s){
     c.lineWidth=W(p[i*3+2]);c.beginPath();c.moveTo(mx,my);c.quadraticCurveTo(x,y,nx,ny);c.stroke();mx=nx;my=ny}
   c.lineWidth=W(p[n*3-1]);c.beginPath();c.moveTo(mx,my);c.lineTo(p[n*3-3],p[n*3-2]);c.stroke();
 }
-function drawZone(c,z,list){const s=z.r.w/z.zw;c.save();c.beginPath();c.rect(z.r.x,z.r.y,z.r.w,z.r.h);c.clip();c.translate(z.r.x,z.r.y);c.scale(s,s);for(const st of list)drawStroke(c,st);c.restore()}
+/* 台数の札の配置：行の下端にそろえ、その行の右端から左へ順に並べる（置いた順に右から） */
+function snapStampY(y){const g=HH/2,bot=y<ALLD?ALLD:Math.min(TOT0,T0+Math.max(1,Math.ceil((y-T0)/g))*g);return+(bot-STH/2-2).toFixed(2)}
+function layoutStamps(list,zw){const rows=new Map();
+  for(const s of list){if(s.t!=='stamp')continue;s.y=snapStampY(s.y);const k=s.y.toFixed(1);if(!rows.has(k))rows.set(k,[]);rows.get(k).push(s)}
+  for(const row of rows.values()){let x=zw-3;for(const s of row){x-=s.bw;s.x=Math.max(1,x);x-=2}}}
+function drawZone(c,z,list){if(z.id&&z.id.startsWith('vday:'))layoutStamps(list,z.zw);const s=z.r.w/z.zw;c.save();c.beginPath();c.rect(z.r.x,z.r.y,z.r.w,z.r.h);c.clip();c.translate(z.r.x,z.r.y);c.scale(s,s);for(const st of list)drawStroke(c,st);c.restore()}
 function drawMain(){if(!cur)return;ctx.setTransform(K,0,0,K,0,0);ctx.globalCompositeOperation='source-over';ctx.fillStyle=PAPER;ctx.fillRect(0,0,cur.w,cur.h);
   cur.bg(ctx);if(cur.ev)cur.ev(ctx);for(const z of cur.zones)drawZone(ctx,z,strokes(z.id));if(cur.fg)cur.fg(ctx)}
 function sizeCanvases(){
@@ -533,6 +546,7 @@ function endPointer(e){
   if(a.mode==='link'){const q=pt(e);if(e.type==='pointerup'&&Math.hypot(q.x-a.q0.x,q.y-a.q0.y)<14)a.link.go();return}
   if(a.mode==='evtap'){if(e.type==='pointerup')eventTap(a.z,a.q0);return}
   if(a.mode==='stamp'){clearTimeout(a.timer);if(e.type==='pointerup')stampTap(a.z,a.q0,a.cx,a.cy,false);return}
+  if(a.mode==='draw'&&a.st.p.length&&state.scrib&&a.st.t==='pen'&&scribbleErase(a.z.id,a.st)){octx.setTransform(1,0,0,1,0,0);octx.clearRect(0,0,ov.width,ov.height);return}
   if(a.mode==='draw'&&a.st.p.length){strokes(a.z.id).push(a.st);markDirty(a.z.id);pushUndo({op:'add',id:a.z.id,st:[a.st]});drawMain()}
   if(a.mode==='erase'&&a.removed.length)pushUndo({op:'del',id:a.z.id,st:a.removed});
   octx.setTransform(1,0,0,1,0,0);octx.clearRect(0,0,ov.width,ov.height);
@@ -798,37 +812,31 @@ function stampTap(z,q,cx,cy,long){
   const s=z.r.w/z.zw,x=(q.x-z.r.x)/s,y=(q.y-z.r.y)/s;
   if(!z.id.startsWith('vday:')){toast('台数の札は日付の列に置けます');return}
   const ex=[...strokes(z.id)].reverse().find(o=>o.t==='stamp'&&hit(o,x,y,3/s));
-  if(ex&&!long){const o={...ex,sel:!ex.sel},arr=strokes(z.id),i=arr.indexOf(ex);if(!o.sel)delete o.sel;
+  if(ex&&!long){const nk={set:'kou',kou:'hiki',hiki:'set'}[kindOf(ex)],o={...ex,kind:nk},arr=strokes(z.id),i=arr.indexOf(ex);delete o.sel;toast(KINDS[nk].name,1200);
     if(i>=0){arr[i]=o;markDirty(z.id);pushUndo({op:'swap',id:z.id,a:ex,b:o});drawMain()}return}
-  if(!ex&&y>=TOT0&&y<=TD0){toast('台数計の欄は自動で集計されます');return}
-  sp={z,x:Math.max(1,Math.min(x,z.zw-30)),y:Math.max(STH/2+1,y),ex,v:ex?{...ex.v}:{},k:ex?kindOf(ex):'swap'};
+  if(!ex&&y>=TOT0){toast('台数の札は台数計より上の欄に置けます');return}
+  sp={z,x:z.zw-30,y:snapStampY(Math.max(STH/2+1,y)),ex,v:ex?{...ex.v}:{},kind:ex?kindOf(ex):'kou'};showType();
   const d=parse(z.id.slice(5));$('#stampDay').textContent=`${d.getMonth()+1}/${d.getDate()}（${WD[d.getDay()]}）`;
-  $('#stampOk').textContent=ex?'更新':'置く';$('#stampDel').hidden=!ex;renderKinds();renderRows();
+  $('#stampOk').textContent=ex?'更新':'置く';$('#stampDel').hidden=!ex;renderRows();
   const bg=$('#stampBg'),card=$('#stampCard');bg.hidden=false;
   const W=card.offsetWidth,H=card.offsetHeight,vw=innerWidth,vh=innerHeight;
   card.style.left=Math.max(16,Math.min(cx+16,vw-W-16))+'px';card.style.top=Math.max(16,Math.min(cy-H/2,vh-H-16))+'px';
 }
-function renderKinds(){const box=$('#stampKinds');box.innerHTML='';
-  for(const[k,K]of Object.entries(KINDS)){const b=document.createElement('button');b.type='button';b.textContent=(K.sign?K.sign+' ':'')+K.lab;
-    b.style.color=K.fg;b.style.background=K.bg;b.setAttribute('aria-pressed',sp.k===k);b.onclick=()=>{sp.k=k;renderKinds()};box.appendChild(b)}}
 function renderRows(){const box=$('#stampRows');box.innerHTML='';
   for(const u of UNITS){const n=sp.v[u]||0,row=document.createElement('div');row.className='srow';
     row.innerHTML=`<b>${u}</b><button aria-label="${u}を1減らす">−</button><output class="${n?'':'zero'}">${n}</output><button aria-label="${u}を1増やす">＋</button>`;
     const[minus,plus]=row.querySelectorAll('button');minus.onclick=()=>{sp.v[u]=Math.max(0,n-1);renderRows()};plus.onclick=()=>{sp.v[u]=Math.min(99,n+1);renderRows()};box.appendChild(row)}}
+function showType(){document.querySelectorAll('.stype button').forEach(b=>b.setAttribute('aria-checked',b.dataset.k===sp.kind));const card=$('#stampCard');card.classList.toggle('kou',sp.kind==='kou');card.classList.toggle('hiki',sp.kind==='hiki')}
+document.querySelectorAll('.stype button').forEach(b=>b.addEventListener('click',()=>{sp.kind=b.dataset.k;showType()}));
 function closeStamp(){$('#stampBg').hidden=true;sp=null}
 $('#stampBg').addEventListener('click',e=>{if(e.target.id==='stampBg')closeStamp()});
 $('#stampCancel').onclick=closeStamp;
 $('#stampDel').onclick=()=>{const{z,ex}=sp,arr=strokes(z.id),i=arr.indexOf(ex);if(i>=0){arr.splice(i,1);markDirty(z.id);pushUndo({op:'del',id:z.id,st:[ex]});drawMain()}closeStamp()};
 $('#stampOk').onclick=()=>{const{z,ex}=sp,v={};for(const u of UNITS)if(sp.v[u])v[u]=sp.v[u];const arr=strokes(z.id);
   if(!Object.keys(v).length){if(ex){const i=arr.indexOf(ex);if(i>=0){arr.splice(i,1);pushUndo({op:'del',id:z.id,st:[ex]})}}}
-  else{const o={t:'stamp',x:ex?ex.x:sp.x,y:ex?ex.y:sp.y,v,bw:+stampWidth(v,sp.k).toFixed(2)};if(sp.k!=='swap')o.k=sp.k;if(ex&&ex.sel)o.sel=true;
+  else{const o={t:'stamp',x:ex?ex.x:sp.x,y:ex?ex.y:sp.y,v,bw:+stampWidth(v).toFixed(2),kind:sp.kind};
     if(ex){const i=arr.indexOf(ex);if(i>=0){arr[i]=o;pushUndo({op:'swap',id:z.id,a:ex,b:o})}}else{arr.push(o);pushUndo({op:'add',id:z.id,st:[o]})}}
   markDirty(z.id);drawMain();closeStamp()};
-
-function clearSel(){if(!cur)return;let n=0;
-  for(const z of cur.zones){if(!z.id.startsWith('vday:'))continue;const arr=strokes(z.id);
-    arr.forEach((s,i)=>{if(s.t==='stamp'&&s.sel){const o={...s};delete o.sel;arr[i]=o;pushUndo({op:'swap',id:z.id,a:s,b:o});n++}});if(n)markDirty(z.id)}
-  if(n){drawMain();toast('選択を解除しました')}else toast('選択中の札はありません')}
 
 /* ---------- 操作帯 ---------- */
 function go(view,d){state.view=view;if(d)state.date=ymd(d);savePrefs();render(true)}
@@ -852,10 +860,10 @@ function updTools(){
   const t=state.tool,sw=$('#swatches'),noCol=t==='eraser'||t==='stamp'||t==='event';sw.innerHTML='';
   if(!noCol)for(const c of COLORS[t]){const b=document.createElement('button');b.className='sw';b.style.background=c;b.setAttribute('aria-label','色 '+c);b.setAttribute('aria-pressed',state.color[t]===c);b.onclick=()=>{state.color[t]=c;savePrefs();updTools()};sw.appendChild(b)}
   sw.hidden=noCol;sw.previousElementSibling.hidden=noCol;
-  const sz=$('#sizes');sz.innerHTML='';sz.hidden=sz.previousElementSibling.hidden=t==='event';if(t==='event')return;if(t==='stamp'){const b=document.createElement('button');b.textContent='選択解除';b.style.fontSize='13px';b.style.border='1px solid var(--line)';b.onclick=clearSel;sz.appendChild(b);return}['細','中','太'].forEach((lab,i)=>{const b=document.createElement('button');b.className='sz';b.setAttribute('aria-label',lab);b.setAttribute('aria-pressed',state.size[t]===i);
+  const sz=$('#sizes');sz.innerHTML='';sz.hidden=sz.previousElementSibling.hidden=t==='event';if(t==='event')return;if(t==='stamp'){sz.hidden=sz.previousElementSibling.hidden=true;return}['細','中','太'].forEach((lab,i)=>{const b=document.createElement('button');b.className='sz';b.setAttribute('aria-label',lab);b.setAttribute('aria-pressed',state.size[t]===i);
     const d=t==='pen'?[4,7,11][i]:[8,12,16][i];b.innerHTML=`<i style="width:${d}px;height:${d}px;${t==='eraser'?'background:transparent;border:1.5px solid currentColor':''}"></i>`;b.onclick=()=>{state.size[t]=i;savePrefs();updTools()};sz.appendChild(b)});
 }
-document.querySelectorAll('.tool').forEach(b=>b.addEventListener('click',()=>{state.tool=b.dataset.tool;updTools();if(state.tool==='event')toast('列をタップ：予定を追加（台数計の上にまとめて表示）／予定をタップ：編集',5000);if(state.tool==='stamp')toast('列をタップ：札を置く／札をタップ：選択（台数計に別集計）／札を長押し：修正',5000)}));
+document.querySelectorAll('.tool').forEach(b=>b.addEventListener('click',()=>{state.tool=b.dataset.tool;updTools();if(state.tool==='event')toast('列をタップ：予定を追加（台数計の上にまとめて表示）／予定をタップ：編集',5000);if(state.tool==='stamp')toast('列をタップ：札を置く／札をタップ：設置のみ→交換→引上のみを切替／札を長押し：修正',5000)}));
 $('#vWeek').onclick=()=>go('week');$('#vDay').onclick=()=>go('day');
 $('#vPdf').onclick=()=>{state.view='pdf';if(!state.pdfId)state.pdfId=pdfList[0]?.id||null;state.fit=true;render(true)};
 $('#prev').onclick=()=>step(-1);$('#next').onclick=()=>step(1);
@@ -880,9 +888,43 @@ window.addEventListener('keydown',e=>{const typing=/^(INPUT|TEXTAREA|SELECT)$/.t
 let rzT=0;window.addEventListener('resize',()=>{clearTimeout(rzT);rzT=setTimeout(()=>{if(cur&&state.fit){sizeCanvases();drawMain()}},120)});
 let toastT=0;function toast(msg,ms=3200){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);if(ms)toastT=setTimeout(()=>t.hidden=true,ms)}
 
+/* ---------- ぐちゃぐちゃで消す ----------
+   短い範囲を何度も往復した線を「消去」とみなし、その範囲に重なる線と札を消す。
+   下に何もなければ false を返し、普通の線として残す。 */
+function scribbleInfo(st){const p=st.p,n=p.length/3;if(n<12)return null;
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9,L=0;for(let i=0;i<n;i++){const x=p[i*3],y=p[i*3+1];x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y);
+    if(i)L+=Math.hypot(x-p[i*3-3],y-p[i*3-2])}
+  const w=x1-x0,h=y1-y0,big=Math.max(w,h);if(big<3)return null;
+  /* 主な往復方向の折り返し回数を数える（細かい揺れは無視） */
+  const rev=axis=>{let dir=0,run=0,cnt=0,thr=big*.18;for(let i=1;i<n;i++){const d=p[i*3+axis]-p[i*3-3+axis];
+      if(!d)continue;const s=Math.sign(d);if(s===dir)run+=Math.abs(d);else{if(dir&&run>=thr)cnt++;dir=s;run=Math.abs(d)}}return cnt};
+  const r=Math.max(rev(0),rev(1));
+  if(r<4||L<big*3.2)return null;
+  return{x0,y0,x1,y1}}
+function scribbleErase(id,st){const b=scribbleInfo(st);if(!b)return false;
+  /* 触れているかの判定用に、ぐちゃぐちゃの線を細かい間隔の点に並べ直す */
+  const sp=[];{const p=st.p;for(let i=0;i+3<p.length;i+=3){const ax=p[i],ay=p[i+1],bx=p[i+3],by=p[i+4],k=Math.max(1,Math.ceil(Math.hypot(bx-ax,by-ay)/1.5));
+      for(let j=0;j<k;j++)sp.push(ax+(bx-ax)*j/k,ay+(by-ay)*j/k)}sp.push(p[p.length-3],p[p.length-2])}
+  const arr=strokes(id),pad=2,tol=st.w*1.5+2,inB=(x,y)=>x>=b.x0-pad&&x<=b.x1+pad&&y>=b.y0-pad&&y<=b.y1+pad,victims=[];
+  for(const o of arr){
+    if(o.t==='stamp'){const cx=o.x+o.bw/2;if(inB(cx,o.y)){let crossed=false;for(let i=0;i<sp.length&&!crossed;i+=2)crossed=hit(o,sp[i],sp[i+1],1);if(crossed)victims.push(o)}continue}
+    if(!o.p||!o.p.length)continue;
+    /* 線の点の半分以上がぐちゃぐちゃの範囲内にあり、ぐちゃぐちゃの線が実際に触れていれば消す */
+    const q=o.p,m=q.length/3;let inside=0;for(let i=0;i<m;i++)if(inB(q[i*3],q[i*3+1]))inside++;
+    if(inside/m<.5)continue;
+    let touched=false;for(let i=0;i<sp.length&&!touched;i+=2)touched=hit(o,sp[i],sp[i+1],tol);
+    if(touched)victims.push(o)}
+  if(!victims.length)return false;
+  for(const v of victims){const i=arr.indexOf(v);if(i>=0)arr.splice(i,1)}
+  markDirty(id);pushUndo({op:'del',id,st:victims});drawMain();toast(`${victims.length}件消しました（元に戻すで戻せます）`,2200);return true}
+function updScrib(){$('#scribBtn').setAttribute('aria-checked',state.scrib)}
+$('#scribBtn').onclick=()=>{state.scrib=!state.scrib;savePrefs();updScrib()};
+
 /* ---------- 起動 ---------- */
 (async()=>{
-  updTools();updFinger();updUndo();
+  updTools();updFinger();updScrib();updUndo();
+  /* 版の表示は Service Worker のキャッシュ名（tegaki-techo-v◯）から取る */
+  try{caches.keys().then(ks=>{const k=ks.find(k=>k.startsWith('tegaki-techo-'));if(k)$('#verNote').textContent='版：'+k.slice(13)}).catch(()=>{})}catch(e){}
   await DB.open();
   if(!DB.ok)$('#storeNote').textContent='この環境では保存できません。ページを閉じると書いた内容は消えます。';
   else{try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
