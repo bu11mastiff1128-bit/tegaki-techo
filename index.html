@@ -651,7 +651,7 @@ function clipText(c,s,x,y,w){if(c.measureText(s).width<=w){c.fillText(s,x,y);ret
 
 /* ---------- Googleカレンダー（読み取りのみ。Google → アプリの一方通行） ----------
    認証はリダイレクト方式（response_type=token）。同じ画面で Google に移り、戻ってきたら #access_token を読む。サーバーは使わない */
-const GCAL_CLIENT_ID='';  // 公開されても問題のない値。クライアントシークレットは使わない
+const GCAL_CLIENT_ID='517054507490-gjkh2ljmle8qm2rqv8563onts3rt319o.apps.googleusercontent.com';  // 公開されても問題のない値。クライアントシークレットは使わない
 const GCAL_SCOPE='https://www.googleapis.com/auth/calendar.readonly';
 const GCAL_FRESH=15*60e3, GCAL_WEEKS=4;  // 15分以内に取得済みなら省略。表示中の週の前後4週ぶんを取る
 let gcal={from:null,to:null,at:0,items:[]},gBusy=false,gWhy='open';
