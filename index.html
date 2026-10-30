@@ -300,6 +300,8 @@ const TODAY_TINT='#eef3fa', RULE_STRONG='#aeb7c4', GRID='#d3e0ec';
 const COLH=950, ALLD=46, T0=50, H0=6, HOURS=18, HH=670/18, TOT0=720, TD0=792;   // 1日の縦列（ゾーン単位）。TOT0〜TD0が台数の合計欄
 const COLW=164.5, DSCALE=2.2;                                             // 平日列の幅とデイリーでの拡大率
 const isWknd=d=>d.getDay()===0||d.getDay()===6;
+const ROWS=26, ROWH=(TOT0-T0)/ROWS;  // 平日の時間帯は時刻に関係なく26行の均等な罫線（上部の空き欄と合わせて27行）
+const rowGap=zw=>zw===COLW?ROWH:HH/2;  // 札をそろえる行の高さ：平日＝26行の罫線、土日＝方眼のマス
 const colW=d=>isWknd(d)?7*HH/2:COLW;                                      // 土日は方眼7マス分（平日の約8割幅）
 function hline(c,x1,x2,y){c.beginPath();c.moveTo(x1,y);c.lineTo(x2,y);c.stroke()}
 function dayColBg(c,r,zw,isToday,grid,soft){
@@ -310,9 +312,7 @@ function dayColBg(c,r,zw,isToday,grid,soft){
     for(let y=T0+g;y<T1-.5;y+=g){c.moveTo(0,y);c.lineTo(zw,y)}
     for(let x=g;x<zw-.5;x+=g){c.moveTo(x,T0);c.lineTo(x,T1)}c.stroke();
     c.strokeStyle=RULE_STRONG;hline(c,0,zw,T0);hline(c,0,zw,T1)}
-  else for(let i=0;i<=HOURS;i++){const y=T0+i*HH;c.setLineDash([]);c.strokeStyle=(i===0||i===HOURS)?RULE_STRONG:RULE;
-    c.lineWidth=(H0+i===12?1.6:1)*lw;hline(c,0,zw,y);c.lineWidth=lw;
-    if(i<HOURS){c.setLineDash([1.5,2.5]);c.strokeStyle=RULE;hline(c,0,zw,y+HH/2)}}
+  else for(let i=0;i<=ROWS;i++){c.strokeStyle=(i===0||i===ROWS)?RULE_STRONG:RULE;hline(c,0,zw,T0+i*ROWH)}
   c.setLineDash([]);c.lineWidth=lw;c.fillStyle='#f2f5f9';c.fillRect(0,TOT0,zw,TD0-TOT0);c.strokeStyle=RULE_STRONG;hline(c,0,zw,TOT0);hline(c,0,zw,TD0);
   c.fillStyle=MUTED;c.font=`700 8.5px ${FS}`;c.fillText('台数計',4,TOT0+11);c.fillText('ToDo',4,TD0+11);
   for(let k=0;k<6;k++){const y=TD0+16+k*23;c.strokeStyle=RULE_STRONG;c.strokeRect(5,y+6,8,8);c.strokeStyle=RULE;hline(c,18,zw-4,y+19)}
@@ -470,15 +470,15 @@ function drawStroke(c,s){
   c.lineWidth=W(p[n*3-1]);c.beginPath();c.moveTo(mx,my);c.lineTo(p[n*3-3],p[n*3-2]);c.stroke();
 }
 /* 台数の札の配置：行の下端にそろえ、その行の右端から左へ順に並べる（置いた順に右から） */
-function snapStampY(y){const g=HH/2,bot=y<ALLD?ALLD:Math.min(TOT0,T0+Math.max(1,Math.ceil((y-T0)/g))*g);return+(bot-STH/2-2).toFixed(2)}
+function snapStampY(y,g){const bot=y<ALLD?ALLD:Math.min(TOT0,T0+Math.max(1,Math.ceil((y-T0)/g))*g);return+(bot-STH/2-2).toFixed(2)}
 function layoutStamps(list,zw){const rows=new Map();
-  for(const s of list){if(s.t!=='stamp')continue;s.y=snapStampY(s.y);const k=s.y.toFixed(1);if(!rows.has(k))rows.set(k,[]);rows.get(k).push(s)}
+  for(const s of list){if(s.t!=='stamp')continue;s.y=snapStampY(s.y,rowGap(zw));const k=s.y.toFixed(1);if(!rows.has(k))rows.set(k,[]);rows.get(k).push(s)}
   for(const row of rows.values()){let x=zw-3;for(const s of row){s.bw=+stampWidth(s.v,kindOf(s)).toFixed(2);x-=s.bw;s.x=Math.max(1,x);x-=2}}}
 function drawZone(c,z,list){if(z.id&&z.id.startsWith('vday:'))layoutStamps(list,z.zw);const s=z.r.w/z.zw;c.save();c.beginPath();c.rect(z.r.x,z.r.y,z.r.w,z.r.h);c.clip();c.translate(z.r.x,z.r.y);c.scale(s,s);for(const st of list)drawStroke(c,st);c.restore()}
-/* 薄い黄色にした札（sel）がある行は、行の背景も薄い黄色にする（行＝30分ごとの罫線の行。上部の空き欄も1行） */
+/* 薄い黄色にした札（sel）がある行は、行の背景も薄い黄色にする（行＝札をそろえる行（平日＝26行の罫線、土日＝方眼）。上部の空き欄も1行） */
 function drawSelRows(c){for(const z of cur.zones){if(!z.id.startsWith('vday:'))continue;const s=z.r.w/z.zw,done=new Set();
-  for(const st of strokes(z.id)){if(st.t!=='stamp'||!st.sel)continue;const bot=+(snapStampY(st.y)+STH/2+2).toFixed(2);if(done.has(bot))continue;done.add(bot);
-    const top=bot<=ALLD+.01?0:bot-HH/2;c.fillStyle='rgba(255,226,70,.26)';c.fillRect(z.r.x,z.r.y+top*s,z.r.w,(bot-top)*s)}}}
+  for(const st of strokes(z.id)){if(st.t!=='stamp'||!st.sel)continue;const g=rowGap(z.zw),bot=+(snapStampY(st.y,g)+STH/2+2).toFixed(2);if(done.has(bot))continue;done.add(bot);
+    const top=bot<=ALLD+.01?0:bot-g;c.fillStyle='rgba(255,226,70,.26)';c.fillRect(z.r.x,z.r.y+top*s,z.r.w,(bot-top)*s)}}}
 function drawMain(){if(!cur)return;ctx.setTransform(K,0,0,K,0,0);ctx.globalCompositeOperation='source-over';ctx.fillStyle=PAPER;ctx.fillRect(0,0,cur.w,cur.h);
   cur.bg(ctx);drawSelRows(ctx);if(cur.ev)cur.ev(ctx);for(const z of cur.zones)drawZone(ctx,z,strokes(z.id));if(cur.fg)cur.fg(ctx)}
 function sizeCanvases(){
@@ -836,7 +836,7 @@ function stampTap(z,q,cx,cy,long){
   if(ex&&!long){const o={...ex,kind:kindOf(ex)},arr=strokes(z.id),i=arr.indexOf(ex);if(ex.sel)delete o.sel;else o.sel=true;  // タップは色（青⇔オレンジ）だけ。種類は変えない
     if(i>=0){arr[i]=o;markDirty(z.id);pushUndo({op:'swap',id:z.id,a:ex,b:o});drawMain()}return}
   if(!ex&&y>=TOT0){toast('台数の札は台数計より上の欄に置けます');return}
-  sp={z,x:z.zw-30,y:snapStampY(Math.max(STH/2+1,y)),ex,v:ex?{...ex.v}:{},kind:ex?kindOf(ex):'kou'};showType();
+  sp={z,x:z.zw-30,y:snapStampY(Math.max(STH/2+1,y),rowGap(z.zw)),ex,v:ex?{...ex.v}:{},kind:ex?kindOf(ex):'kou'};showType();
   const d=parse(z.id.slice(5));$('#stampDay').textContent=`${d.getMonth()+1}/${d.getDate()}（${WD[d.getDay()]}）`;
   $('#stampOk').textContent=ex?'更新':'置く';$('#stampDel').hidden=!ex;renderRows();
   const bg=$('#stampBg'),card=$('#stampCard');bg.hidden=false;
