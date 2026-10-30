@@ -815,7 +815,7 @@ function stampTap(z,q,cx,cy,long){
   if(ex&&!long){const nk={set:'kou',kou:'hiki',hiki:'set'}[kindOf(ex)],o={...ex,kind:nk},arr=strokes(z.id),i=arr.indexOf(ex);delete o.sel;toast(KINDS[nk].name,1200);
     if(i>=0){arr[i]=o;markDirty(z.id);pushUndo({op:'swap',id:z.id,a:ex,b:o});drawMain()}return}
   if(!ex&&y>=TOT0){toast('台数の札は台数計より上の欄に置けます');return}
-  sp={z,x:z.zw-30,y:snapStampY(Math.max(STH/2+1,y)),ex,v:ex?{...ex.v}:{},kind:ex?kindOf(ex):'kou'};showType();
+  sp={z,x:z.zw-30,y:snapStampY(Math.max(STH/2+1,y)),ex,v:ex?{...ex.v}:{},kind:ex?kindOf(ex):'set'};showType();
   const d=parse(z.id.slice(5));$('#stampDay').textContent=`${d.getMonth()+1}/${d.getDate()}（${WD[d.getDay()]}）`;
   $('#stampOk').textContent=ex?'更新':'置く';$('#stampDel').hidden=!ex;renderRows();
   const bg=$('#stampBg'),card=$('#stampCard');bg.hidden=false;
