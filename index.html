@@ -574,13 +574,24 @@ $('#pdfDel').addEventListener('click',async()=>{
 /* ---------- バックアップ ---------- */
 function b64(buf){const u=new Uint8Array(buf);let s='';for(let i=0;i<u.length;i+=0x8000)s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s)}
 function unb64(s){const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u.buffer}
-$('#exportBtn').addEventListener('click',async()=>{closeMenu();await flush();
+/* 書き出し：共有シート（iPad では「ファイルに保存」）を優先し、使えないときだけ <a download> に戻す。
+   準備に時間がかかると Safari がタップ由来と認めず共有を断るため、そのときは作ったファイルを取っておき、次のタップですぐ共有する */
+let readyBackup=null;
+function downloadBackup(f){const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),60000);toast('バックアップを書き出しました')}
+async function shareBackup(f){
+  if(!(navigator.canShare&&navigator.canShare({files:[f]}))){downloadBackup(f);return}
+  try{await navigator.share({files:[f]});readyBackup=null}
+  catch(e){if(e.name==='AbortError'){readyBackup=null;return}
+    if(e.name==='NotAllowedError'){readyBackup={f,at:Date.now()};toast('準備ができました。もう一度「バックアップを書き出す」を押してください',8000);return}
+    readyBackup=null;downloadBackup(f)}}
+$('#exportBtn').addEventListener('click',async()=>{closeMenu();
+  if(readyBackup&&Date.now()-readyBackup.at<120000){shareBackup(readyBackup.f);return}
+  await flush();
   const out={app:'tegaki-techo',v:1,at:new Date().toISOString(),zones:{},pdfs:[]};
   for(const k of(await DB.keys('zones'))||[])out.zones[k]=await DB.get('zones',k);
   for(const m of pdfList){const b=await DB.get('pdfs',m.id);if(b)out.pdfs.push({meta:m,data:b64(b)})}
-  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(out)],{type:'application/json'}));
-  a.download=`手帳バックアップ_${ymd(new Date())}.json`;document.body.appendChild(a);a.click();a.remove();
-  toast('バックアップを書き出しました。保存されない場合は、HTMLファイル版で書き出してください。')});
+  await shareBackup(new File([JSON.stringify(out)],`手帳バックアップ_${ymd(new Date())}.json`,{type:'application/json'}))});
 $('#importFile').addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';closeMenu();if(!f)return;
   try{const d=JSON.parse(await f.text());if(d.app!=='tegaki-techo')throw 0;let n=0;
     for(const[k,v]of Object.entries(d.zones||{})){await DB.put('zones',k,v);if(!k.startsWith('__')){zones.set(k,v);n++}}
