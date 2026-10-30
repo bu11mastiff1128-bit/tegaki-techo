@@ -319,10 +319,12 @@ const COLH=950, ALLD=46, T0=50, H0=6, HOURS=18, HH=670/18, TOT0=720, TD0=792;   
 const COLW=164.5, DSCALE=2.2;                                             // 平日列の幅とデイリーでの拡大率
 const isWknd=d=>d.getDay()===0||d.getDay()===6;
 const ROWS=26, ROWH=(TOT0-T0)/ROWS;  // 平日の時間帯は時刻に関係なく26行の均等な罫線（上部の空き欄と合わせて27行）
-const rowGap=zw=>zw===COLW?ROWH:HH/2;  // 札をそろえる行の高さ：平日＝26行の罫線、土日＝方眼のマス
+/* 2026年11月は、26行に変える前に書き込んだ分があるので、元の行（6〜24時・30分ごとの36行）のままにする */
+const oldRows=ds=>ds>='2026-11-01'&&ds<='2026-11-30';
+const rowGap=(zw,ds)=>zw===COLW&&!oldRows(ds)?ROWH:HH/2;  // 札をそろえる行の高さ：平日＝26行の罫線（2026年11月は30分の行）、土日＝方眼のマス
 const colW=d=>isWknd(d)?7*HH/2:COLW;                                      // 土日は方眼7マス分（平日の約8割幅）
 function hline(c,x1,x2,y){c.beginPath();c.moveTo(x1,y);c.lineTo(x2,y);c.stroke()}
-function dayColBg(c,r,zw,isToday,grid,soft){
+function dayColBg(c,r,zw,isToday,grid,soft,ds){
   const s=r.w/zw,lw=1/s;c.save();c.translate(r.x,r.y);c.scale(s,s);
   if(isToday){c.fillStyle=TODAY_TINT;c.fillRect(0,0,zw,COLH)}
   c.lineWidth=lw;c.strokeStyle=RULE;hline(c,0,zw,ALLD);
@@ -330,6 +332,9 @@ function dayColBg(c,r,zw,isToday,grid,soft){
     for(let y=T0+g;y<T1-.5;y+=g){c.moveTo(0,y);c.lineTo(zw,y)}
     for(let x=g;x<zw-.5;x+=g){c.moveTo(x,T0);c.lineTo(x,T1)}c.stroke();
     c.strokeStyle=RULE_STRONG;hline(c,0,zw,T0);hline(c,0,zw,T1)}
+  else if(oldRows(ds))for(let i=0;i<=HOURS;i++){const y=T0+i*HH;c.setLineDash([]);c.strokeStyle=(i===0||i===HOURS)?RULE_STRONG:RULE;
+    c.lineWidth=(H0+i===12?1.6:1)*lw;hline(c,0,zw,y);c.lineWidth=lw;
+    if(i<HOURS){c.setLineDash([1.5,2.5]);c.strokeStyle=RULE;hline(c,0,zw,y+HH/2)}}
   else for(let i=0;i<=ROWS;i++){c.strokeStyle=(i===0||i===ROWS)?RULE_STRONG:RULE;hline(c,0,zw,T0+i*ROWH)}
   c.setLineDash([]);c.lineWidth=lw;c.fillStyle='#f2f5f9';c.fillRect(0,TOT0,zw,TD0-TOT0);c.strokeStyle=RULE_STRONG;hline(c,0,zw,TOT0);hline(c,0,zw,TD0);
   c.fillStyle=MUTED;c.font=`700 8.5px ${FS}`;c.fillText('台数計',4,TOT0+11);c.fillText('ToDo',4,TD0+11);
@@ -396,7 +401,7 @@ function weekPage(d){
       let hx=col.x+10+c.measureText(n).width;c.font=`700 13px ${FS}`;c.fillText(WD[dd.getDay()],hx,119);hx+=c.measureText('月').width+6;
       const hn=holiday(dd);if(hn){c.font=`500 10.5px ${FS}`;c.fillText(hn,hx,119)}
       c.fillStyle=MUTED;c.textAlign='right';c.font=`500 14px ${FS}`;c.fillText('›',col.x+col.w-5,119);c.textAlign='left';c.restore();
-      dayColBg(c,col.zr,col.w,col.t,isWknd(dd),dd.getDay()===6?'R':dd.getDay()===0?'L':'');
+      dayColBg(c,col.zr,col.w,col.t,isWknd(dd),dd.getDay()===6?'R':dd.getDay()===0?'L':'',ymd(dd));
     }
     miniCal(c,mc,RX,92,cols.map(k=>k.dd));
     c.fillStyle=MUTED;c.font=`700 13px ${FS}`;c.fillText('週の目標',RX,290);c.fillText('ノート',RX,530);
@@ -421,7 +426,7 @@ function dayPage(d){
     c.strokeStyle=RULE;c.lineWidth=1;hline(c,40,1420,200);
     c.fillStyle=ACCENT;c.font=`700 14px ${FS}`;c.fillText('⇄ 週間ページと連動',40,242);
     c.textAlign='right';c.fillStyle=MUTED;c.font=`500 13px ${FS}`;c.fillText('週間を開く ›',cr.x+cr.w,242);c.textAlign='left';
-    dayColBg(c,cr,w,false,wk);
+    dayColBg(c,cr,w,false,wk,'',k);
     c.fillStyle=MUTED;c.font=`700 14px ${FS}`;c.fillText('メモ',mr.x,242);
     c.strokeStyle=RULE;c.lineWidth=1;for(let y=mr.y+34;y<mr.y+mr.h;y+=34)hline(c,mr.x,mr.x+mr.w,y);
     c.strokeStyle=RULE_STRONG;c.strokeRect(mr.x,mr.y,mr.w,mr.h);
@@ -489,13 +494,13 @@ function drawStroke(c,s){
 }
 /* 台数の札の配置：行の下端にそろえ、その行の右端から左へ順に並べる（置いた順に右から） */
 function snapStampY(y,g){const bot=y<ALLD?ALLD:Math.min(TOT0,T0+Math.max(1,Math.ceil((y-T0)/g))*g);return+(bot-STH/2-2).toFixed(2)}
-function layoutStamps(list,zw){const rows=new Map();
-  for(const s of list){if(s.t!=='stamp')continue;s.y=snapStampY(s.y,rowGap(zw));const k=s.y.toFixed(1);if(!rows.has(k))rows.set(k,[]);rows.get(k).push(s)}
+function layoutStamps(list,zw,ds){const rows=new Map();
+  for(const s of list){if(s.t!=='stamp')continue;s.y=snapStampY(s.y,rowGap(zw,ds));const k=s.y.toFixed(1);if(!rows.has(k))rows.set(k,[]);rows.get(k).push(s)}
   for(const row of rows.values()){let x=zw-3;for(const s of row){s.bw=+stampWidth(s.v,kindOf(s)).toFixed(2);x-=s.bw;s.x=Math.max(1,x);x-=2}}}
-function drawZone(c,z,list){if(z.id&&z.id.startsWith('vday:'))layoutStamps(list,z.zw);const s=z.r.w/z.zw;c.save();c.beginPath();c.rect(z.r.x,z.r.y,z.r.w,z.r.h);c.clip();c.translate(z.r.x,z.r.y);c.scale(s,s);for(const st of list)drawStroke(c,st);c.restore()}
+function drawZone(c,z,list){if(z.id&&z.id.startsWith('vday:'))layoutStamps(list,z.zw,z.id.slice(5));const s=z.r.w/z.zw;c.save();c.beginPath();c.rect(z.r.x,z.r.y,z.r.w,z.r.h);c.clip();c.translate(z.r.x,z.r.y);c.scale(s,s);for(const st of list)drawStroke(c,st);c.restore()}
 /* 薄い黄色にした札（sel）がある行は、行の背景も薄い黄色にする（行＝札をそろえる行（平日＝26行の罫線、土日＝方眼）。上部の空き欄も1行） */
 function drawSelRows(c){for(const z of cur.zones){if(!z.id.startsWith('vday:'))continue;const s=z.r.w/z.zw,done=new Set();
-  for(const st of strokes(z.id)){if(st.t!=='stamp'||!st.sel)continue;const g=rowGap(z.zw),bot=+(snapStampY(st.y,g)+STH/2+2).toFixed(2);if(done.has(bot))continue;done.add(bot);
+  for(const st of strokes(z.id)){if(st.t!=='stamp'||!st.sel)continue;const g=rowGap(z.zw,z.id.slice(5)),bot=+(snapStampY(st.y,g)+STH/2+2).toFixed(2);if(done.has(bot))continue;done.add(bot);
     const top=bot<=ALLD+.01?0:bot-g;c.fillStyle='rgba(255,226,70,.26)';c.fillRect(z.r.x,z.r.y+top*s,z.r.w,(bot-top)*s)}}}
 function drawMain(){if(!cur)return;ctx.setTransform(K,0,0,K,0,0);ctx.globalCompositeOperation='source-over';ctx.fillStyle=PAPER;ctx.fillRect(0,0,cur.w,cur.h);
   cur.bg(ctx);drawSelRows(ctx);if(cur.ev)cur.ev(ctx);for(const z of cur.zones)drawZone(ctx,z,strokes(z.id));if(cur.fg)cur.fg(ctx)}
@@ -889,7 +894,7 @@ function stampTap(z,q,cx,cy,long){
   if(ex&&!long){const o={...ex},arr=strokes(z.id),i=arr.indexOf(ex);if(ex.sel)delete o.sel;else o.sel=true;  // タップは色（青⇔オレンジ）だけ。種類は変えない
     if(i>=0){arr[i]=o;markDirty(z.id);pushUndo({op:'swap',id:z.id,a:ex,b:o});drawMain()}return}
   if(!ex&&y>=TOT0){toast('台数の札は台数計より上の欄に置けます');return}
-  sp={z,x:z.zw-30,y:snapStampY(Math.max(STH/2+1,y),rowGap(z.zw)),ex,v:ex?{...ex.v}:{},kind:ex?kindOf(ex):'kou'};showType();
+  sp={z,x:z.zw-30,y:snapStampY(Math.max(STH/2+1,y),rowGap(z.zw,z.id.slice(5))),ex,v:ex?{...ex.v}:{},kind:ex?kindOf(ex):'kou'};showType();
   const d=parse(z.id.slice(5));$('#stampDay').textContent=`${d.getMonth()+1}/${d.getDate()}（${WD[d.getDay()]}）`;
   $('#stampOk').textContent=ex?'更新':'置く';$('#stampDel').hidden=!ex;renderRows();
   const bg=$('#stampBg'),card=$('#stampCard');bg.hidden=false;
