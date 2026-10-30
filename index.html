@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>手書き手帳</title>
+<meta name="theme-color" content="#f7f8fa">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="手書き手帳">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+/* Layout: 机（desk）の上に紙を1枚置く。上に道具帯、下は紙だけがスクロールする */
+:root{
+  --desk:#e3e7ed; --bar:#f7f8fa; --line:#d2d8e1; --fg:#1f2530; --muted:#646e7e;
+  --accent:#2d4f86; --accent-ink:#ffffff; --chip:#eaeef4; --warn:#a4382f;
+  --font-ui:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --font-num:"Shippori Mincho","Hiragino Mincho ProN","Yu Mincho",serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --desk:#14171c; --bar:#1d2129; --line:#323945; --fg:#e6e9ef; --muted:#9aa4b4;
+  --accent:#93b3e8; --accent-ink:#0f1522; --chip:#282e39; --warn:#ef8f86; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --desk:#14171c; --bar:#1d2129; --line:#323945; --fg:#e6e9ef; --muted:#9aa4b4;
+  --accent:#93b3e8; --accent-ink:#0f1522; --chip:#282e39; --warn:#ef8f86; color-scheme:dark}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--desk);color:var(--fg);font-family:var(--font-ui);overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bar)}
+#app{display:flex;flex-direction:column;height:100%}
+.bar{background:var(--bar);border-bottom:1px solid var(--line);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:8px;display:flex;flex-direction:column;gap:8px;position:relative;z-index:5}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.spacer{flex:1}
+button,.btn{font:inherit;color:var(--fg);background:transparent;border:0;border-radius:8px;min-height:36px;min-width:36px;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;font-size:14px}
+button:hover,.btn:hover{background:var(--chip)}
+button:focus-visible,.btn:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button:disabled{opacity:.35;cursor:default;background:transparent}
+svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.seg{display:inline-flex;background:var(--chip);border-radius:10px;padding:3px}
+.seg button{min-height:30px;border-radius:7px;font-weight:500;padding:0 12px}
+.seg button[aria-pressed="true"]{background:var(--bar);box-shadow:0 1px 2px rgba(0,0,0,.12);color:var(--accent)}
+.nav{display:flex;align-items:center;gap:2px;min-width:0}
+.title{position:relative;font-family:var(--font-num);font-weight:700;font-size:17px;padding:0 8px;min-height:36px;display:flex;align-items:center;border-radius:8px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.title:hover{background:var(--chip)}
+.title input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+select{font:inherit;font-size:14px;color:var(--fg);background:var(--chip);border:0;border-radius:8px;min-height:36px;padding:0 10px;max-width:190px}
+.today{border:1px solid var(--line);font-size:13px}
+.tools{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.tool[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.sep{width:1px;height:24px;background:var(--line);margin:0 4px}
+.sw{width:28px;height:28px;min-width:28px;min-height:28px;padding:0;border-radius:50%;border:2px solid transparent;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
+.sw[aria-pressed="true"]{border-color:var(--fg)}
+.sz{min-width:32px;padding:0}
+.sz i{display:block;border-radius:50%;background:currentColor}
+.sz[aria-pressed="true"]{background:var(--chip);color:var(--accent)}
+.zoom{font-size:13px;font-variant-numeric:tabular-nums;min-width:52px}
+#stage{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px max(24px,env(safe-area-inset-bottom,0px))}
+#sheet{position:relative;margin:0 auto;box-shadow:0 1px 2px rgba(20,30,50,.12),0 8px 28px rgba(20,30,50,.14);border-radius:2px;background:#fcfcfa}
+#sheet canvas{position:absolute;left:0;top:0;display:block}
+#ov{touch-action:pan-x pan-y}
+body.finger #ov{touch-action:none}
+.hint{max-width:640px;margin:0 auto 12px;background:var(--bar);border:1px solid var(--line);border-radius:10px;padding:10px 8px 10px 14px;display:flex;gap:8px;align-items:center;font-size:13.5px;line-height:1.6}
+.hint p{margin:0;flex:1;min-width:0}
+.empty{max-width:420px;margin:12vh auto 0;text-align:center;line-height:1.8;color:var(--muted)}
+.empty h2{font-family:var(--font-num);color:var(--fg);font-size:22px;margin:0 0 6px;text-wrap:balance}
+.primary{background:var(--accent);color:var(--accent-ink);font-weight:500;padding:0 16px;margin-top:12px}
+.primary:hover{background:var(--accent);filter:brightness(1.08)}
+#menu{position:absolute;right:max(16px,env(safe-area-inset-right,0px));top:calc(100% + 6px);width:min(320px,calc(100vw - 32px));background:var(--bar);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:8px;display:flex;flex-direction:column;gap:2px}
+#menu button,#menu label.btn{justify-content:flex-start;width:100%;text-align:left;padding:8px 10px;min-height:40px}
+#menu .note{font-size:12px;color:var(--muted);padding:4px 10px 8px;line-height:1.6}
+#menu hr{border:0;border-top:1px solid var(--line);margin:4px 0;width:100%}
+.switch{margin-left:auto;width:40px;height:24px;border-radius:12px;background:var(--line);position:relative;flex:none;transition:background .15s}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .15s}
+[aria-checked="true"] .switch{background:var(--accent)}
+[aria-checked="true"] .switch::after{transform:translateX(16px)}
+.danger{color:var(--warn)}
+input,textarea,select{-webkit-user-select:text;user-select:text}
+#evBg{position:fixed;inset:0;z-index:15;background:rgba(15,20,30,.28);display:flex;align-items:center;justify-content:center;padding:16px}
+#evCard{width:min(440px,100%);max-height:calc(100% - 8px);overflow:auto;background:var(--bar);color:var(--fg);border:1px solid var(--line);border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.25);padding:16px;display:flex;flex-direction:column;gap:12px}
+#evCard h3{margin:0;font-size:16px;font-weight:700}
+.ef{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted);font-weight:500}
+.ef input,.ef select,.ef textarea{font:inherit;font-size:15px;color:var(--fg);background:var(--chip);border:1px solid transparent;border-radius:8px;padding:8px 10px;min-height:40px;width:100%;box-sizing:border-box}
+.ef textarea{min-height:64px;resize:vertical}
+.ef input:focus,.ef select:focus,.ef textarea:focus{outline:none;border-color:var(--accent)}
+.tsteps{display:flex;flex-direction:column;gap:8px}
+.tstep{display:grid;grid-template-columns:34px 1fr 1fr 74px 1fr 1fr;align-items:center;gap:5px}
+.tstep .tl{font-size:12.5px;color:var(--muted);font-weight:500}
+.tstep button{min-height:44px;padding:0 2px;background:var(--chip);font-size:13px;font-weight:500;font-variant-numeric:tabular-nums}
+.tstep output{text-align:center;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;font-family:var(--font-num)}
+.erow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chk{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--fg)}
+.chk input{width:20px;height:20px;accent-color:var(--accent)}
+.ecols{display:flex;gap:8px;flex-wrap:wrap}
+.ecols button{width:32px;height:32px;min-width:32px;min-height:32px;padding:0;border-radius:50%;border:2px solid transparent}
+.ecols button[aria-pressed="true"]{border-color:var(--fg)}
+.eacts{display:flex;gap:8px;flex-wrap:wrap}
+.eacts button{flex:1;min-height:42px;background:var(--chip);font-weight:500;white-space:nowrap}
+.eacts .ok{background:var(--accent);color:var(--accent-ink)}
+.enote{font-size:12px;color:var(--muted);line-height:1.6;margin:0}
+#stampBg{position:fixed;inset:0;z-index:15;background:rgba(15,20,30,.18)}
+#stampCard{position:fixed;width:min(280px,calc(100vw - 32px));background:var(--bar);color:var(--fg);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.22);padding:12px;display:flex;flex-direction:column;gap:6px}
+#stampCard h3{margin:0 0 4px;font-size:14px;font-weight:700;display:flex;justify-content:space-between;align-items:baseline}
+#stampCard h3 span{font-size:12px;font-weight:500;color:var(--muted)}
+.srow{display:grid;grid-template-columns:44px 44px 1fr 44px;align-items:center;gap:6px}
+.srow b{font-size:15px;font-family:var(--font-num)}
+.srow output{text-align:center;font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+.srow output.zero{color:var(--muted);font-weight:500}
+.srow button{min-height:40px;background:var(--chip);font-size:18px}
+.sacts{display:flex;gap:6px;margin-top:6px}
+.sacts button{flex:1;min-height:40px;background:var(--chip);font-weight:500}
+.sacts .ok{background:var(--accent);color:var(--accent-ink)}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bar);padding:10px 16px;border-radius:10px;font-size:13.5px;max-width:calc(100vw - 32px);z-index:20;line-height:1.5}
+.vis{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@media (max-width:520px){.seg button{padding:0 9px}.title{font-size:15px}.hide-sm{display:none}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box}body{margin:0}</style>
+</head>
+<body>
+<div id="app">
+  <header class="bar">
+    <div class="row">
+      <div class="seg" role="group" aria-label="表示">
+        <button id="vWeek" aria-pressed="true">週間</button>
+        <button id="vDay" aria-pressed="false">デイリー</button>
+        <button id="vPdf" aria-pressed="false">PDF</button>
+      </div>
+      <div class="nav">
+        <button id="prev" aria-label="前へ"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <label class="title" id="titleWrap"><span id="title">—</span><input id="datePick" type="date" aria-label="日付を選ぶ"></label>
+        <select id="pdfSel" aria-label="PDFを選ぶ" hidden></select>
+        <span class="title" id="pageNo" hidden></span>
+        <button id="next" aria-label="次へ"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+        <button id="todayBtn" class="today">今日</button>
+        <label class="btn today" id="addPdf" hidden>＋PDF<input id="pdfFile" class="vis" type="file" accept="application/pdf,.pdf"></label>
+      </div>
+      <span class="spacer"></span>
+      <button id="menuBtn" aria-label="設定" aria-expanded="false"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg></button>
+    </div>
+    <div class="row tools">
+      <button class="tool" data-tool="pen" aria-pressed="true" aria-label="ペン"><svg viewBox="0 0 24 24"><path d="M4 20l1.2-4.6L16.5 4.1a2 2 0 012.8 0l.6.6a2 2 0 010 2.8L8.6 18.8z"/><path d="M14.5 6l3.5 3.5"/></svg><span class="hide-sm">ペン</span></button>
+      <button class="tool" data-tool="hl" aria-pressed="false" aria-label="蛍光ペン"><svg viewBox="0 0 24 24"><path d="M9 14l-3 3v3h6l1-2"/><path d="M9 14l7.5-9.5a2 2 0 013 0l1 1a2 2 0 010 3L11 17z"/></svg><span class="hide-sm">蛍光ペン</span></button>
+      <button class="tool" data-tool="eraser" aria-pressed="false" aria-label="消しゴム"><svg viewBox="0 0 24 24"><path d="M8 20h12"/><path d="M4.6 14.6l9-9a2 2 0 012.8 0l3 3a2 2 0 010 2.8L11.8 19H8.2l-3.6-3.6a.6.6 0 010-.8z"/><path d="M9 10l5 5"/></svg><span class="hide-sm">消しゴム</span></button>
+      <button class="tool" data-tool="stamp" aria-pressed="false" aria-label="台数"><svg viewBox="0 0 24 24"><rect x="3.5" y="7" width="17" height="10" rx="3"/><path d="M8 10.5v3M11 12h2M16 10.5v3"/></svg><span class="hide-sm">台数</span></button>
+      <button class="tool" data-tool="event" aria-pressed="false" aria-label="予定"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4M12 13v5M9.5 15.5h5"/></svg><span class="hide-sm">予定</span></button>
+      <span class="sep"></span>
+      <span id="swatches" class="tools"></span>
+      <span class="sep"></span>
+      <span id="sizes" class="tools"></span>
+      <span class="sep"></span>
+      <button id="undo" aria-label="元に戻す"><svg viewBox="0 0 24 24"><path d="M9 7L4 12l5 5"/><path d="M4 12h10a6 6 0 010 12h-2" transform="translate(0 -6)"/></svg></button>
+      <button id="redo" aria-label="やり直す"><svg viewBox="0 0 24 24"><path d="M15 7l5 5-5 5"/><path d="M20 12H10a6 6 0 000 12h2" transform="translate(0 -6)"/></svg></button>
+      <span class="spacer"></span>
+      <button id="zOut" aria-label="縮小"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
+      <button id="zFit" class="zoom" title="幅に合わせる">100%</button>
+      <button id="zIn" aria-label="拡大"><svg viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"/></svg></button>
+    </div>
+    <div id="menu" hidden>
+      <button id="fingerBtn" role="switch" aria-checked="false">指でも書く<span class="switch"></span></button>
+      <div class="note">オフのとき、指はスクロール専用です。Apple Pencil・マウスで書けます。</div>
+      <hr>
+      <button id="exportBtn">バックアップを書き出す</button>
+      <label class="btn" id="importLbl">バックアップから復元<input id="importFile" class="vis" type="file" accept="application/json,.json"></label>
+      <div class="note" id="storeNote">この端末のブラウザ内に自動保存しています。</div>
+      <hr id="pdfDelHr" hidden>
+      <button id="pdfDel" class="danger" hidden>このPDFを削除</button>
+    </div>
+  </header>
+  <main id="stage">
+    <div class="hint" id="hint" hidden><p>週間ページの各日の縦列と、デイリーページ左側の列は同じ内容です。どちらに書いても両方に表示されます。</p><button id="hintX" aria-label="閉じる"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="empty" id="empty" hidden>
+      <h2>PDFはまだありません</h2>
+      <div>手持ちのPDFテンプレートを読み込むと、ページごとに書き込めます。</div>
+      <label class="btn primary">PDFを読み込む<input id="pdfFile2" class="vis" type="file" accept="application/pdf,.pdf"></label>
+    </div>
+    <div id="sheet"><canvas id="cv"></canvas><canvas id="ov"></canvas></div>
+  </main>
+</div>
+<div id="evBg" hidden><form id="evCard" role="dialog" aria-label="予定" novalidate>
+  <h3 id="evHead">予定を追加</h3>
+  <label class="ef">タイトル<input id="evTitle" type="text" placeholder="〇〇 打合せ" autocomplete="off"></label>
+  <label class="chk"><input id="evAll" type="checkbox">終日</label>
+  <div class="erow"><label class="ef">日付<input id="evDate" type="date"></label><label class="ef" id="evEndDateL">終了日<input id="evEndDate" type="date"></label></div>
+  <div id="evTimes" class="tsteps"><input id="evStart" type="hidden"><input id="evEnd" type="hidden">
+    <div class="tstep" data-k="start"><span class="tl">開始</span><button type="button" data-d="-60">−1時</button><button type="button" data-d="-15">−15分</button><output></output><button type="button" data-d="15">＋15分</button><button type="button" data-d="60">＋1時</button></div>
+    <div class="tstep" data-k="end"><span class="tl">終了</span><button type="button" data-d="-60">−1時</button><button type="button" data-d="-15">−15分</button><output></output><button type="button" data-d="15">＋15分</button><button type="button" data-d="60">＋1時</button></div>
+  </div>
+  <div class="erow"><label class="ef">繰り返し<select id="evRep"><option value="none">なし</option><option value="daily">毎日</option><option value="weekdays">平日（月〜金）</option><option value="weekly">毎週</option><option value="monthly">毎月（同じ日）</option><option value="yearly">毎年</option></select></label><label class="ef" id="evUntilL">繰り返しの終了日<input id="evUntil" type="date"></label></div>
+  <div class="ef">色<div class="ecols" id="evCols"></div></div>
+  <label class="ef">メモ<textarea id="evMemo"></textarea></label>
+  <p class="enote" id="evNote" hidden>繰り返し予定の変更は、すべての回に反映されます。</p>
+  <div class="eacts" id="evActs"></div>
+</form></div>
+<div id="stampBg" hidden><div id="stampCard" role="dialog" aria-label="台数"><h3>台数<span id="stampDay"></span></h3><div id="stampRows"></div>
+<div class="sacts"><button id="stampDel" class="danger">削除</button><button id="stampCancel">閉じる</button><button id="stampOk" class="ok">置く</button></div></div></div>
+<div id="toast" hidden></div>
+
+<script>
+(()=>{
+'use strict';
+/* ---------- 定数 ---------- */
+const PAPER='#fcfcfa', RULE='#d5dae2', DOT='#bcc3ce', INK='#2b313d', MUTED='#7b8494', ACCENT='#2d4f86', SAT='#2f5fb0', SUN='#c2413b';
+const FD='"Shippori Mincho","Hiragino Mincho ProN","Yu Mincho",serif';
+const FS='"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",sans-serif';
+const COLORS={pen:['#1d2433','#2d4f86','#c2413b','#2f7d55'],hl:['#f5d33f','#f29bb8','#8cc8f0','#a8e08c']};
+const SIZES={pen:[1.4,2.4,4],hl:[10,16,24],eraser:[8,16,30]};
+const UNITS=['L','M','S','C','SP','SS'];                 // 台数のサイズ区分
+const WD='日月火水木金土';
+
+const $=s=>document.querySelector(s);
+const pad=n=>String(n).padStart(2,'0');
+const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parse=s=>{const[a,b,c]=s.split('-').map(Number);return new Date(a,b-1,c)};
+const addDays=(d,n)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);
+const monday=d=>addDays(d,-((d.getDay()+6)%7));
+const inR=(p,r)=>p.x>=r.x&&p.x<=r.x+r.w&&p.y>=r.y&&p.y<=r.y+r.h;
+
+/* ---------- 日本の祝日（2020年以降の規則で計算） ---------- */
+const holCache={};
+function holidays(y){
+  if(holCache[y])return holCache[y];
+  const h={},key=(m,d)=>`${y}-${pad(m)}-${pad(d)}`,set=(m,d,n)=>{h[key(m,d)]=n};
+  [[1,1,'元日'],[2,11,'建国記念の日'],[2,23,'天皇誕生日'],[4,29,'昭和の日'],[5,3,'憲法記念日'],[5,4,'みどりの日'],[5,5,'こどもの日'],[8,11,'山の日'],[11,3,'文化の日'],[11,23,'勤労感謝の日']].forEach(a=>set(...a));
+  const nthMon=(m,n)=>1+((8-new Date(y,m-1,1).getDay())%7)+(n-1)*7;
+  set(1,nthMon(1,2),'成人の日');set(7,nthMon(7,3),'海の日');set(9,nthMon(9,3),'敬老の日');set(10,nthMon(10,2),'スポーツの日');
+  const k=y-1980,q=Math.floor(k/4);
+  set(3,Math.floor(20.8431+0.242194*k)-q,'春分の日');set(9,Math.floor(23.2488+0.242194*k)-q,'秋分の日');
+  for(const s of Object.keys(h)){const d=parse(s),mid=addDays(d,1),nx=addDays(d,2);
+    if(h[ymd(nx)]&&!h[ymd(mid)]&&mid.getDay()!==0)h[ymd(mid)]='国民の休日';}
+  for(const s of Object.keys(h).sort()){const d=parse(s);if(d.getDay()===0){let n=addDays(d,1);while(h[ymd(n)])n=addDays(n,1);if(n.getFullYear()===y)h[ymd(n)]='振替休日';}}
+  return holCache[y]=h;
+}
+const holiday=d=>holidays(d.getFullYear())[ymd(d)]||'';
+const dayColor=d=>holiday(d)||d.getDay()===0?SUN:d.getDay()===6?SAT:INK;
+function isoWeek(d){const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const n=(t.getUTCDay()+6)%7;t.setUTCDate(t.getUTCDate()-n+3);const f=new Date(Date.UTC(t.getUTCFullYear(),0,4));return 1+Math.round(((t-f)/864e5-3+((f.getUTCDay()+6)%7))/7)}
+
+/* ---------- 保存（IndexedDB） ---------- */
+const DB={db:null,ok:false,
+  open(){return new Promise(res=>{try{const r=indexedDB.open('tegaki-techo',1);
+    r.onupgradeneeded=()=>{const d=r.result;['zones','pdfs','pdfmeta'].forEach(n=>{if(!d.objectStoreNames.contains(n))d.createObjectStore(n)})};
+    r.onsuccess=()=>{this.db=r.result;this.ok=true;res()};r.onerror=()=>res();r.onblocked=()=>res();}catch(e){res()}})},
+  run(store,mode,fn){if(!this.ok)return Promise.resolve(undefined);return new Promise(res=>{try{const t=this.db.transaction(store,mode);const r=fn(t.objectStore(store));t.oncomplete=()=>res(r?r.result:undefined);t.onerror=t.onabort=()=>res(undefined)}catch(e){res(undefined)}})},
+  get(s,k){return this.run(s,'readonly',o=>o.get(k))},
+  put(s,k,v){return this.run(s,'readwrite',o=>o.put(v,k))},
+  del(s,k){return this.run(s,'readwrite',o=>o.delete(k))},
+  keys(s){return this.run(s,'readonly',o=>o.getAllKeys())},
+  all(s){return this.run(s,'readonly',o=>o.getAll())}
+};
+const zones=new Map(), dirty=new Set(); let saveT=0;
+const strokes=id=>{let a=zones.get(id);if(!a){a=[];zones.set(id,a)}return a};
+async function ensureZones(ids){await Promise.all(ids.filter(id=>!zones.has(id)).map(async id=>{const v=await DB.get('zones',id);if(!zones.has(id))zones.set(id,Array.isArray(v)?v:[])}))}
+function markDirty(id){dirty.add(id);clearTimeout(saveT);saveT=setTimeout(flush,400)}
+async function flush(){clearTimeout(saveT);const ids=[...dirty];dirty.clear();
+  for(const id of ids){const a=zones.get(id)||[];if(a.length)await DB.put('zones',id,a);else await DB.del('zones',id)}}
+window.addEventListener('pagehide',flush);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)flush()});
+
+/* ---------- 状態 ---------- */
+const prefs=(()=>{try{return JSON.parse(localStorage.getItem('tegaki-prefs'))||{}}catch(e){return{}}})();
+const state={view:prefs.view==='day'?'day':'week',date:ymd(new Date()),pdfId:null,pdfPage:0,
+  tool:'pen',color:{pen:COLORS.pen[0],hl:COLORS.hl[0],...(prefs.color||{})},size:{pen:1,hl:1,eraser:1,...(prefs.size||{})},
+  finger:!!prefs.finger,zoom:1,fit:true};
+function savePrefs(){try{localStorage.setItem('tegaki-prefs',JSON.stringify({view:state.view==='pdf'?'week':state.view,color:state.color,size:state.size,finger:state.finger}))}catch(e){}}
+let pdfList=[]; const pdfDocs=new Map(), bmpCache=new Map(), pdfLinks=new Map();
+let cur=null, K=1, undoS=[], redoS=[];
+
+/* ---------- ページ定義（週間バーチカル・横向き。土日の時間帯は方眼） ---------- */
+const TODAY_TINT='#eef3fa', RULE_STRONG='#aeb7c4', GRID='#d3e0ec';
+const COLH=950, ALLD=46, T0=50, H0=6, HOURS=18, HH=670/18, TOT0=720, TD0=792;   // 1日の縦列（ゾーン単位）。TOT0〜TD0が台数の合計欄
+const COLW=164.5, DSCALE=2.2;                                             // 平日列の幅とデイリーでの拡大率
+const isWknd=d=>d.getDay()===0||d.getDay()===6;
+const colW=d=>isWknd(d)?7*HH/2:COLW;                                      // 土日は方眼7マス分（平日の約8割幅）
+function hline(c,x1,x2,y){c.beginPath();c.moveTo(x1,y);c.lineTo(x2,y);c.stroke()}
+function dayColBg(c,r,zw,isToday,grid,soft){
+  const s=r.w/zw,lw=1/s;c.save();c.translate(r.x,r.y);c.scale(s,s);
+  if(isToday){c.fillStyle=TODAY_TINT;c.fillRect(0,0,zw,COLH)}
+  c.lineWidth=lw;c.strokeStyle=RULE;hline(c,0,zw,ALLD);
+  if(grid){const g=HH/2,T1=T0+HOURS*HH;c.strokeStyle=GRID;c.beginPath();
+    for(let y=T0+g;y<T1-.5;y+=g){c.moveTo(0,y);c.lineTo(zw,y)}
+    for(let x=g;x<zw-.5;x+=g){c.moveTo(x,T0);c.lineTo(x,T1)}c.stroke();
+    c.strokeStyle=RULE_STRONG;hline(c,0,zw,T0);hline(c,0,zw,T1)}
+  else for(let i=0;i<=HOURS;i++){const y=T0+i*HH;c.setLineDash([]);c.strokeStyle=(i===0||i===HOURS)?RULE_STRONG:RULE;
+    c.lineWidth=(H0+i===12?1.6:1)*lw;hline(c,0,zw,y);c.lineWidth=lw;
+    if(i<HOURS){c.setLineDash([1.5,2.5]);c.strokeStyle=RULE;hline(c,0,zw,y+HH/2)}}
+  c.setLineDash([]);c.lineWidth=lw;c.fillStyle='#f2f5f9';c.fillRect(0,TOT0,zw,TD0-TOT0);c.strokeStyle=RULE_STRONG;hline(c,0,zw,TOT0);hline(c,0,zw,TD0);
+  c.fillStyle=MUTED;c.font=`700 8.5px ${FS}`;c.fillText('台数計',4,TOT0+11);c.fillText('ToDo',4,TD0+11);
+  for(let k=0;k<6;k++){const y=TD0+16+k*23;c.strokeStyle=RULE_STRONG;c.strokeRect(5,y+6,8,8);c.strokeStyle=RULE;hline(c,18,zw-4,y+19)}
+  /* 外枠。soft='L'/'R' の辺は土日の境目なので薄い線にする */
+  const edge=(x1,y1,x2,y2,col)=>{c.strokeStyle=col;c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.stroke()};
+  edge(0,0,zw,0,RULE_STRONG);edge(0,COLH,zw,COLH,RULE_STRONG);
+  if(soft!=='L')edge(0,0,0,COLH,RULE_STRONG);edge(zw,0,zw,COLH,soft==='R'?GRID:RULE_STRONG);c.restore();
+}
+function hourLabels(c,xRight,top,s){const f=Math.min(s,1.6);c.fillStyle=MUTED;c.textAlign='right';c.font=`500 ${Math.round(11*f)}px ${FS}`;
+  for(let i=0;i<HOURS;i++)c.fillText(String(H0+i),xRight,top+(T0+i*HH)*s+12*f);c.textAlign='left'}
+/* ミニカレンダー：日付タップでデイリーへ、左端の週番号タップでその週へ */
+function miniCells(base,x,y,w){const y0=base.getFullYear(),m0=base.getMonth(),off=(new Date(y0,m0,1).getDay()+6)%7,nd=new Date(y0,m0+1,0).getDate(),cw=w/8,rh=21,cells=[],weeks=[];
+  for(let n=1;n<=nd;n++){const i=off+n-1,d=new Date(y0,m0,n),r=Math.floor(i/7),cy=y+42+r*rh;cells.push({d,x:x+cw+(i%7)*cw,y:cy,w:cw,h:rh});
+    if(!weeks[r])weeks[r]={mon:monday(d),x,y:cy,w:cw,h:rh}}return{y0,m0,cw,x,cells,weeks}}
+function miniLinks(mc,links){for(const k of mc.cells)links.push({r:{x:k.x,y:k.y,w:k.w,h:k.h},go:()=>go('day',k.d)});
+  for(const k of mc.weeks)links.push({r:{x:k.x,y:k.y,w:k.w,h:k.h},go:()=>go('week',k.mon)})}
+function miniCal(c,mc,x,y,weekDays){
+  c.fillStyle=INK;c.font=`700 15px ${FD}`;c.fillText(`${mc.m0+1}月`,x,y+14);c.fillStyle=MUTED;c.font=`500 11px ${FS}`;c.fillText(String(mc.y0),x+40,y+14);
+  c.textAlign='center';c.fillStyle=MUTED;c.font=`500 10px ${FS}`;c.fillText('週',x+mc.cw/2,y+36);c.font=`500 11px ${FS}`;
+  '月火水木金土日'.split('').forEach((t,i)=>{c.fillStyle=i===5?SAT:i===6?SUN:MUTED;c.fillText(t,x+mc.cw*(i+1)+mc.cw/2,y+36)});
+  const wk=new Set(weekDays.map(ymd)),today=ymd(new Date());
+  for(const k of mc.weeks){c.fillStyle='#e6ebf3';c.fillRect(k.x+2,k.y+2,k.w-4,k.h-4);c.fillStyle=ACCENT;c.font=`700 10.5px ${FS}`;c.fillText(String(isoWeek(k.mon)),k.x+k.w/2,k.y+14.5)}
+  for(const k of mc.cells){if(wk.has(ymd(k.d))){c.fillStyle=TODAY_TINT;c.fillRect(k.x,k.y,k.w,k.h)}
+    if(ymd(k.d)===today){c.strokeStyle=ACCENT;c.lineWidth=1.2;c.beginPath();c.arc(k.x+k.w/2,k.y+k.h/2,9,0,7);c.stroke()}
+    c.fillStyle=dayColor(k.d);c.font=`500 12px ${FS}`;c.fillText(String(k.d.getDate()),k.x+k.w/2,k.y+15)}
+  c.textAlign='left';
+}
+/* 月タブ：タップでその月の1日を含む週へ */
+function monthTabs(year,cur,links,x0=820){const tabs=[],w=48,g=2,y=26,h=30;
+  for(let m=0;m<12;m++){const r={x:x0+m*(w+g),y,w,h};tabs.push({m,r});links.push({r,go:()=>{let f=new Date(year,m,1);while(isWknd(f))f=addDays(f,1);go('week',f)}})}
+  return{draw(c){c.textAlign='center';for(const t of tabs){const on=t.m===cur;
+    c.fillStyle=on?ACCENT:'#eef1f5';c.beginPath();c.roundRect?c.roundRect(t.r.x,t.r.y,t.r.w,t.r.h,6):c.rect(t.r.x,t.r.y,t.r.w,t.r.h);c.fill();
+    c.fillStyle=on?'#ffffff':INK;c.font=`${on?700:500} 13px ${FS}`;c.fillText(`${t.m+1}月`,t.r.x+t.r.w/2,t.r.y+20)}c.textAlign='left'}}}
+function textLink(c,links,txt,xRight,y,go){c.font=`500 13px ${FS}`;const w=c.measureText(txt).width;c.fillStyle=ACCENT;c.textAlign='right';c.fillText(txt,xRight,y);c.textAlign='left';
+  links&&links.push({r:{x:xRight-w-6,y:y-18,w:w+12,h:26},go});return w}
+function weekPage(d){
+  const mon=monday(d),sun=addDays(mon,6),thu=addDays(mon,3),zs=[],links=[],cols=[],today=ymd(new Date());
+  let x=76;
+  for(let i=0;i<7;i++){const dd=addDays(mon,i),w=colW(dd),zr={x,y:130,w,h:COLH};
+    zs.push({id:'vday:'+ymd(dd),r:zr,zw:w,zh:COLH});links.push({r:{x,y:92,w,h:38},go:()=>go('day',dd)});cols.push({dd,x,w,zr,t:ymd(dd)===today});x+=w}
+  const RX=1186,RW=234,mc=miniCells(thu,RX,92,RW),goal={x:RX,y:300,w:RW,h:200},note={x:RX,y:540,w:RW,h:540};
+  zs.push({id:'vwgoal:'+ymd(mon),r:goal,zw:RW,zh:200},{id:'vwnote:'+ymd(mon),r:note,zw:RW,zh:540});
+  miniLinks(mc,links);
+  const pw=addDays(mon,-7),nw=addDays(mon,7),tp=`‹ 前週 ${pw.getMonth()+1}/${pw.getDate()}`,tn=`翌週 ${nw.getMonth()+1}/${nw.getDate()} ›`;
+  {const m=document.createElement('canvas').getContext('2d');m.font=`500 13px ${FS}`;const wn=m.measureText(tn).width,wp=m.measureText(tp).width;
+   links.push({r:{x:1420-wn-6,y:60,w:wn+12,h:24},go:()=>go('week',nw)},{r:{x:1420-wn-24-wp-6,y:60,w:wp+12,h:24},go:()=>go('week',pw)})}
+  const tabs=monthTabs(thu.getFullYear(),thu.getMonth(),links);
+  return{w:1460,h:1110,zones:zs,links,ev(c){for(const col of cols)drawEvents(c,col.zr,col.w,ymd(col.dd))},fg(c){for(const col of cols)drawTotals(c,col.zr,col.w,strokes('vday:'+ymd(col.dd)))},bg(c){
+    const m1=mon.getMonth()+1,m2=sun.getMonth()+1;c.textBaseline='alphabetic';
+    c.fillStyle=INK;c.font=`700 40px ${FD}`;const mt=m1===m2?`${m1}月`:`${m1}月 – ${m2}月`;c.fillText(mt,40,58);
+    let xx=40+c.measureText(mt).width+16;c.fillStyle=MUTED;c.font=`500 15px ${FS}`;c.fillText(String(mon.getFullYear()),xx,58);
+    xx+=c.measureText('0000').width+20;c.fillStyle=ACCENT;c.font=`700 17px ${FS}`;c.fillText(`第${isoWeek(mon)}週`,xx,58);
+    xx+=c.measureText('第00週').width+14;c.fillStyle=MUTED;c.font=`500 14px ${FS}`;c.fillText(`${m1}.${pad(mon.getDate())} – ${m2}.${pad(sun.getDate())}`,xx,58);
+    tabs.draw(c);{const w=textLink(c,null,tn,1420,76);textLink(c,null,tp,1420-w-24,76)}c.strokeStyle=RULE;c.lineWidth=1;hline(c,40,1420,84);
+    for(const col of cols){
+      const dd=col.dd;c.save();c.beginPath();c.rect(col.x,92,col.w,38);c.clip();
+      if(col.t){c.fillStyle=TODAY_TINT;c.fillRect(col.x,92,col.w,38)}
+      c.fillStyle=dayColor(dd);c.font=`700 22px ${FD}`;const n=String(dd.getDate());c.fillText(n,col.x+6,120);
+      let hx=col.x+10+c.measureText(n).width;c.font=`700 13px ${FS}`;c.fillText(WD[dd.getDay()],hx,119);hx+=c.measureText('月').width+6;
+      const hn=holiday(dd);if(hn){c.font=`500 10.5px ${FS}`;c.fillText(hn,hx,119)}
+      c.fillStyle=MUTED;c.textAlign='right';c.font=`500 14px ${FS}`;c.fillText('›',col.x+col.w-5,119);c.textAlign='left';c.restore();
+      dayColBg(c,col.zr,col.w,col.t,isWknd(dd),dd.getDay()===6?'R':dd.getDay()===0?'L':'');
+    }
+    miniCal(c,mc,RX,92,cols.map(k=>k.dd));
+    c.fillStyle=MUTED;c.font=`700 13px ${FS}`;c.fillText('週の目標',RX,290);c.fillText('ノート',RX,530);
+    c.strokeStyle=RULE;c.lineWidth=1;for(let y=goal.y+33;y<goal.y+goal.h;y+=33)hline(c,RX,RX+RW,y);
+    c.strokeStyle=RULE_STRONG;c.strokeRect(goal.x,goal.y,goal.w,goal.h);c.strokeRect(note.x,note.y,note.w,note.h);
+  }};
+}
+function dayPage(d){
+  const k=ymd(d),wk=isWknd(d),w=colW(d),links=[],cr={x:96,y:258,w:w*DSCALE,h:COLH*DSCALE},mx=cr.x+cr.w+40,mr={x:mx,y:258,w:1420-mx,h:cr.h};
+  links.push({r:{x:40,y:220,w:cr.x+cr.w-40,h:30},go:()=>go('week',d)});
+  const mc=miniCells(d,1186,14,234);miniLinks(mc,links);
+  const tabs=monthTabs(d.getFullYear(),d.getMonth(),links,560),prev=addDays(d,-1),next=addDays(d,1);
+  const t2=`${next.getMonth()+1}/${next.getDate()} 翌日 ›`,t1=`‹ 前日 ${prev.getMonth()+1}/${prev.getDate()}`;
+  const pg={w:1460,h:Math.ceil(cr.y+cr.h+40),zones:[{id:'vday:'+k,r:cr,zw:w,zh:COLH},{id:'vdfree:'+k,r:mr,zw:mr.w,zh:mr.h}],links,ev(c){drawEvents(c,cr,w,k)},fg(c){drawTotals(c,cr,w,strokes('vday:'+k))},bg(c){
+    const col=dayColor(d);c.textBaseline='alphabetic';
+    c.fillStyle=col;c.font=`700 64px ${FD}`;const n=String(d.getDate());c.fillText(n,38,88);const nw=c.measureText(n).width;
+    c.font=`700 21px ${FS}`;c.fillText(`${d.getMonth()+1}月　${WD[d.getDay()]}曜日`,38+nw+18,56);
+    const hn=holiday(d);c.font=`500 15px ${FS}`;c.fillStyle=hn?SUN:MUTED;const sub=hn||`${d.getFullYear()}年`;c.fillText(sub,38+nw+18,84);
+    const sw=c.measureText(sub).width;c.fillStyle=ACCENT;c.font=`700 15px ${FS}`;c.fillText(`第${isoWeek(d)}週`,38+nw+30+sw,84);
+    tabs.draw(c);miniCal(c,mc,1186,14,[d]);
+    const w2=textLink(c,null,t2,1160,96);textLink(c,null,t1,1160-w2-28,96);
+    c.strokeStyle=RULE;c.lineWidth=1;hline(c,40,1420,200);
+    c.fillStyle=ACCENT;c.font=`700 14px ${FS}`;c.fillText('⇄ 週間ページと連動',40,242);
+    c.textAlign='right';c.fillStyle=MUTED;c.font=`500 13px ${FS}`;c.fillText('週間を開く ›',cr.x+cr.w,242);c.textAlign='left';
+    dayColBg(c,cr,w,false,wk);
+    c.fillStyle=MUTED;c.font=`700 14px ${FS}`;c.fillText('メモ',mr.x,242);
+    c.strokeStyle=RULE;c.lineWidth=1;for(let y=mr.y+34;y<mr.y+mr.h;y+=34)hline(c,mr.x,mr.x+mr.w,y);
+    c.strokeStyle=RULE_STRONG;c.strokeRect(mr.x,mr.y,mr.w,mr.h);
+  }};
+  /* 前日・翌日リンクの当たり判定（文字幅は描画時と同じ計測で求める） */
+  const m=document.createElement('canvas').getContext('2d');m.font=`500 13px ${FS}`;const w2=m.measureText(t2).width,w1=m.measureText(t1).width;
+  links.push({r:{x:1160-w2-6,y:78,w:w2+12,h:28},go:()=>go('day',next)},{r:{x:1160-w2-28-w1-6,y:78,w:w1+12,h:28},go:()=>go('day',prev)});
+  return pg;
+}
+function pdfPageDef(){
+  const m=pdfList.find(p=>p.id===state.pdfId);if(!m)return null;
+  const i=Math.min(state.pdfPage,m.n-1),[pw,ph]=m.sizes[i],h=Math.round(1000*ph/pw);
+  return{w:1000,h,pdf:{id:m.id,i},zones:[{id:`pdf:${m.id}:${i}`,r:{x:0,y:0,w:1000,h},zw:1000,zh:h}],links:[],linkKey:m.id+':'+i,
+    bg(c){const b=bmpCache.get(m.id+':'+i);if(b)c.drawImage(b,0,0,1000,h)}};
+}
+
+/* ---------- 描画 ---------- */
+const cv=$('#cv'),ov=$('#ov'),ctx=cv.getContext('2d'),octx=ov.getContext('2d'),sheet=$('#sheet'),stage=$('#stage');
+/* 台数の札 */
+const stampText=v=>UNITS.filter(u=>v[u]).map(u=>u+v[u]).join('・');
+const STF=`700 9.5px ${FS}`,STH=14;
+const measCtx=document.createElement('canvas').getContext('2d');
+function stampWidth(v){measCtx.font=STF;return measCtx.measureText(stampText(v)).width+10}
+function drawStamp(c,s){const w=s.bw,y=s.y-STH/2;c.save();c.globalAlpha=1;c.globalCompositeOperation='source-over';
+  c.fillStyle=s.sel?'#fde3c4':'#e2ebf7';c.strokeStyle=s.sel?'#d9822b':'#7f9cc7';c.lineWidth=s.sel?1.2:.8;c.beginPath();c.roundRect?c.roundRect(s.x,y,w,STH,4):c.rect(s.x,y,w,STH);c.fill();c.stroke();
+  c.fillStyle=s.sel?'#7a3f06':'#1f3d6e';c.font=STF;c.textBaseline='middle';c.fillText(stampText(s.v),s.x+5,s.y+.5);c.restore()}
+/* 台数計：1段目＝全体（黒）、2段目＝選択した札（オレンジ）、3段目＝全体−選択（緑） */
+function drawTotals(c,r,zw,list){const sum={},sel={};let any=false;
+  for(const s of list)if(s.t==='stamp')for(const u of UNITS){const n=s.v[u]||0;sum[u]=(sum[u]||0)+n;if(s.sel){sel[u]=(sel[u]||0)+n;any=true}}
+  const sc=r.w/zw;c.save();c.translate(r.x,r.y);c.scale(sc,sc);c.textBaseline='alphabetic';
+  const tok=o=>UNITS.filter(u=>o[u]).map(u=>u+o[u]);
+  const all=tok(sum);
+  if(!all.length){c.fillStyle=RULE_STRONG;c.font=`500 10px ${FS}`;c.fillText('—',8,TOT0+44);c.restore();return}
+  const groups=[{p:all,col:INK}];
+  if(any){const rest={};for(const u of UNITS)rest[u]=(sum[u]||0)-(sel[u]||0);
+    groups.push({p:tok(sel),col:'#b4620f'},{p:tok(rest).length?tok(rest):['0'],col:'#2f7d55'})}
+  let L=[];
+  for(const[fs,sep]of[[15,'  '],[13.5,' '],[12,' '],[10.5,' ']]){c.font=`700 ${fs}px ${FS}`;L=[];
+    for(const g of groups){let l=null;for(const p of g.p){const s=l==null?p:l+sep+p;if(l!=null&&c.measureText(s).width>zw-10){L.push({s:l,col:g.col});l=p}else l=s}L.push({s:l,col:g.col})}
+    if(L.length<=Math.min(4,Math.floor((TD0-TOT0-8)/(fs+1))))break}   /* 欄に収まる中で一番大きい文字にする（折り返しも可） */
+  /* 欄の高さ72に収まるよう行間を決める。3行以上は「台数計」の見出しを隠して上から詰める */
+  const fs=parseFloat(c.font.match(/(\d+(\.\d+)?)px/)[1]),n=Math.min(L.length,4);let y0,dy=Math.min(fs+3,(TD0-TOT0-8)/Math.max(n,1));
+  if(n===1)y0=TOT0+44;else if(n===2)y0=TOT0+36;
+  else{c.fillStyle='#f2f5f9';c.fillRect(1,TOT0+1,zw-2,13);y0=TOT0+4+dy-2}
+  L.slice(0,4).forEach((o,i)=>{c.fillStyle=o.col;c.fillText(o.s,6,y0+i*dy)});
+  c.restore()}
+function drawStroke(c,s){
+  if(s.t==='stamp'){drawStamp(c,s);return}
+  const p=s.p,n=p.length/3;if(!n)return;
+  c.strokeStyle=c.fillStyle=s.c;c.lineCap='round';c.lineJoin='round';
+  if(s.t==='hl'){c.save();c.globalAlpha=.4;c.globalCompositeOperation='multiply';c.lineWidth=s.w;c.beginPath();c.moveTo(p[0],p[1]);
+    for(let i=1;i<n;i++)c.lineTo(p[i*3],p[i*3+1]);if(n===1)c.lineTo(p[0]+.01,p[1]);c.stroke();c.restore();return}
+  const W=pr=>s.w*(.45+pr*1.1);
+  if(n===1){c.beginPath();c.arc(p[0],p[1],W(p[2])/2,0,7);c.fill();return}
+  let mx=p[0],my=p[1];
+  for(let i=1;i<n-1;i++){const x=p[i*3],y=p[i*3+1],nx=(x+p[i*3+3])/2,ny=(y+p[i*3+4])/2;
+    c.lineWidth=W(p[i*3+2]);c.beginPath();c.moveTo(mx,my);c.quadraticCurveTo(x,y,nx,ny);c.stroke();mx=nx;my=ny}
+  c.lineWidth=W(p[n*3-1]);c.beginPath();c.moveTo(mx,my);c.lineTo(p[n*3-3],p[n*3-2]);c.stroke();
+}
+function drawZone(c,z,list){const s=z.r.w/z.zw;c.save();c.beginPath();c.rect(z.r.x,z.r.y,z.r.w,z.r.h);c.clip();c.translate(z.r.x,z.r.y);c.scale(s,s);for(const st of list)drawStroke(c,st);c.restore()}
+function drawMain(){if(!cur)return;ctx.setTransform(K,0,0,K,0,0);ctx.globalCompositeOperation='source-over';ctx.fillStyle=PAPER;ctx.fillRect(0,0,cur.w,cur.h);
+  cur.bg(ctx);if(cur.ev)cur.ev(ctx);for(const z of cur.zones)drawZone(ctx,z,strokes(z.id));if(cur.fg)cur.fg(ctx)}
+function sizeCanvases(){
+  if(state.fit)state.zoom=Math.max(.3,(stage.clientWidth-parseFloat(getComputedStyle(stage).paddingLeft)-parseFloat(getComputedStyle(stage).paddingRight))/cur.w);
+  const z=state.zoom,dpr=window.devicePixelRatio||1;K=z*dpr;
+  const lim=16e6;if(cur.w*cur.h*K*K>lim)K=Math.sqrt(lim/(cur.w*cur.h));
+  for(const c of[cv,ov]){c.width=Math.round(cur.w*K);c.height=Math.round(cur.h*K);c.style.width=cur.w*z+'px';c.style.height=cur.h*z+'px'}
+  sheet.style.width=cur.w*z+'px';sheet.style.height=cur.h*z+'px';
+  $('#zFit').textContent=Math.round(z*100)+'%';
+}
+let renderTok=0;
+async function render(scrollTop){
+  const tok=++renderTok;await flush();
+  let pg=null;
+  if(state.view==='week')pg=weekPage(parse(state.date));else if(state.view==='day')pg=dayPage(parse(state.date));else pg=pdfPageDef();
+  updateBar();
+  if(!pg){cur=null;sheet.hidden=true;$('#empty').hidden=state.view!=='pdf';return}
+  await ensureZones(pg.zones.map(z=>z.id));
+  if(pg.pdf){await ensureBitmap(pg.pdf.id,pg.pdf.i);pg.links=pdfLinks.get(pg.linkKey)||[]}
+  if(tok!==renderTok)return;
+  cur=pg;$('#empty').hidden=true;sheet.hidden=false;sizeCanvases();drawMain();octx.setTransform(1,0,0,1,0,0);octx.clearRect(0,0,ov.width,ov.height);
+  if(scrollTop)stage.scrollTop=0;
+}
+
+/* ---------- 書く・消す ---------- */
+let act=null,raf=0;
+function pt(e){const r=ov.getBoundingClientRect();return{x:(e.clientX-r.left)*cur.w/r.width,y:(e.clientY-r.top)*cur.h/r.height}}
+function addPts(e){const evs=(e.getCoalescedEvents&&e.getCoalescedEvents().length)?e.getCoalescedEvents():[e];const{z,s,st}=act,p=st.p;
+  for(const ev of evs){const q=pt(ev),x=(q.x-z.r.x)/s,y=(q.y-z.r.y)/s;
+    let pr=ev.pointerType==='pen'?(ev.pressure||.5):.5;
+    const n=p.length;if(n){const dx=x-p[n-3],dy=y-p[n-2];if(dx*dx+dy*dy<(.35/s)**2)continue;pr=p[n-1]*.6+pr*.4}
+    p.push(+x.toFixed(2),+y.toFixed(2),+pr.toFixed(2))}}
+function drawOverlay(){raf=0;if(!act||act.mode!=='draw')return;octx.setTransform(K,0,0,K,0,0);octx.clearRect(0,0,cur.w,cur.h);drawZone(octx,act.z,[act.st])}
+function hit(st,x,y,t){if(st.t==='stamp')return x>=st.x-t&&x<=st.x+st.bw+t&&y>=st.y-STH/2-t&&y<=st.y+STH/2+t;const p=st.p,n=p.length/3,r=t+st.w*.6,r2=r*r;
+  if(n===1)return(p[0]-x)**2+(p[1]-y)**2<=r2;
+  for(let i=0;i<n-1;i++){const ax=p[i*3],ay=p[i*3+1],bx=p[i*3+3],by=p[i*3+4],dx=bx-ax,dy=by-ay,L=dx*dx+dy*dy;
+    let u=L?((x-ax)*dx+(y-ay)*dy)/L:0;u=u<0?0:u>1?1:u;const ex=ax+u*dx-x,ey=ay+u*dy-y;if(ex*ex+ey*ey<=r2)return true}return false}
+function eraseAt(q){const{z,s}=act,x=(q.x-z.r.x)/s,y=(q.y-z.r.y)/s,t=SIZES.eraser[state.size.eraser]/2/s,a=strokes(z.id);let ch=false;
+  for(let i=a.length-1;i>=0;i--)if(hit(a[i],x,y,t)){act.removed.push(a.splice(i,1)[0]);ch=true}
+  if(ch){markDirty(z.id);drawMain()}}
+function eraseEvt(e){const evs=(e.getCoalescedEvents&&e.getCoalescedEvents().length)?e.getCoalescedEvents():[e];for(const ev of evs)eraseAt(pt(ev))}
+
+ov.addEventListener('pointerdown',e=>{
+  if(!cur||act)return;
+  if(e.pointerType==='mouse'&&e.button!==0)return;
+  closeMenu();const q=pt(e),canDraw=e.pointerType!=='touch'||state.finger||state.tool==='stamp'||state.tool==='event';
+  const link=[...cur.links].reverse().find(l=>inR(q,l.r));
+  if(link){act={mode:'link',link,q0:q,id:e.pointerId,first:e,canDraw};if(canDraw)ov.setPointerCapture(e.pointerId);return}
+  if(!canDraw)return;
+  const z=cur.zones.find(z=>inR(q,z.r));if(!z)return;
+  if(state.tool==='event'){act={mode:'evtap',z,q0:q,id:e.pointerId};return}
+  if(state.tool==='stamp'){const a={mode:'stamp',z,q0:q,id:e.pointerId,cx:e.clientX,cy:e.clientY};act=a;
+    a.timer=setTimeout(()=>{if(act===a){act=null;stampTap(a.z,a.q0,a.cx,a.cy,true)}},500);return}
+  e.preventDefault();ov.setPointerCapture(e.pointerId);startStroke(z,q,e);
+});
+function startStroke(z,q,e){const s=z.r.w/z.zw;
+  if(state.tool==='eraser'){act={mode:'erase',z,s,removed:[],id:e.pointerId};eraseAt(q);return}
+  const t=state.tool;act={mode:'draw',z,s,id:e.pointerId,st:{t:t==='hl'?'hl':'pen',c:state.color[t],w:+(SIZES[t][state.size[t]]/s).toFixed(3),p:[]}};
+  addPts(e);drawOverlay()}
+ov.addEventListener('pointermove',e=>{
+  if(!act||e.pointerId!==act.id)return;
+  if(act.mode==='link'){const q=pt(e);if(Math.hypot(q.x-act.q0.x,q.y-act.q0.y)<12)return;
+    const a=act;act=null;if(!a.canDraw||state.tool==='stamp'||state.tool==='event')return;const z=cur.zones.find(z=>inR(a.q0,z.r));if(!z)return;
+    startStroke(z,a.q0,a.first);if(act.mode==='draw'){addPts(e);drawOverlay()}else eraseEvt(e);return}
+  if(act.mode==='evtap'){const q=pt(e);if(Math.hypot(q.x-act.q0.x,q.y-act.q0.y)>12)act=null;return}
+  if(act.mode==='stamp'){const q=pt(e);if(Math.hypot(q.x-act.q0.x,q.y-act.q0.y)>12){clearTimeout(act.timer);act=null}return}
+  if(act.mode==='draw'){addPts(e);if(!raf)raf=requestAnimationFrame(drawOverlay)}
+  else if(act.mode==='erase')eraseEvt(e);
+});
+function endPointer(e){
+  if(!act||e.pointerId!==act.id)return;const a=act;act=null;
+  if(a.mode==='link'){const q=pt(e);if(e.type==='pointerup'&&Math.hypot(q.x-a.q0.x,q.y-a.q0.y)<14)a.link.go();return}
+  if(a.mode==='evtap'){if(e.type==='pointerup')eventTap(a.z,a.q0);return}
+  if(a.mode==='stamp'){clearTimeout(a.timer);if(e.type==='pointerup')stampTap(a.z,a.q0,a.cx,a.cy,false);return}
+  if(a.mode==='draw'&&a.st.p.length){strokes(a.z.id).push(a.st);markDirty(a.z.id);pushUndo({op:'add',id:a.z.id,st:[a.st]});drawMain()}
+  if(a.mode==='erase'&&a.removed.length)pushUndo({op:'del',id:a.z.id,st:a.removed});
+  octx.setTransform(1,0,0,1,0,0);octx.clearRect(0,0,ov.width,ov.height);
+}
+ov.addEventListener('pointerup',endPointer);ov.addEventListener('pointercancel',endPointer);
+/* iPadのSafariでペンの動きがスクロールにならないようにする */
+const stopStylus=e=>{if(state.finger||[...e.touches].some(t=>t.touchType==='stylus'))e.cancelable&&e.preventDefault()};
+ov.addEventListener('touchstart',stopStylus,{passive:false});ov.addEventListener('touchmove',stopStylus,{passive:false});
+
+/* ---------- 元に戻す ---------- */
+function pushUndo(a){undoS.push(a);if(undoS.length>200)undoS.shift();redoS=[];updUndo()}
+function apply(a,inverse){const arr=strokes(a.id);
+  if(a.op==='swap'){const[f,to]=inverse?[a.b,a.a]:[a.a,a.b],i=arr.indexOf(f);if(i>=0)arr[i]=to;markDirty(a.id);return}const adding=(a.op==='add')!==inverse;
+  if(adding)arr.push(...a.st);else for(const s of a.st){const i=arr.indexOf(s);if(i>=0)arr.splice(i,1)}markDirty(a.id)}
+async function undo(){const a=undoS.pop();if(!a)return;await ensureZones([a.id]);apply(a,true);redoS.push(a);drawMain();updUndo()}
+async function redo(){const a=redoS.pop();if(!a)return;await ensureZones([a.id]);apply(a,false);undoS.push(a);drawMain();updUndo()}
+function updUndo(){$('#undo').disabled=!undoS.length;$('#redo').disabled=!redoS.length}
+
+/* ---------- PDF ---------- */
+let libP=null;
+const loadScript=src=>new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s)});
+function pdfLib(){if(!libP)libP=(async()=>{const b='vendor/pdfjs/';
+  await loadScript(b+'pdf.min.js');await loadScript(b+'pdf.worker.min.js');window.pdfjsLib.GlobalWorkerOptions.workerSrc=b+'pdf.worker.min.js';return window.pdfjsLib})()
+  .catch(()=>{libP=null;return null});return libP}
+async function getDoc(id){if(pdfDocs.has(id))return pdfDocs.get(id);const lib=await pdfLib();if(!lib)return null;const buf=await DB.get('pdfs',id);if(!buf)return null;
+  const doc=await lib.getDocument({data:new Uint8Array(buf.slice(0))}).promise;pdfDocs.set(id,doc);return doc}
+async function ensureBitmap(id,i){const key=id+':'+i;if(bmpCache.has(key))return;
+  try{const doc=await getDoc(id);if(!doc){toast('PDFを表示する準備ができませんでした。ネット接続を確認してください。');return}
+    const pg=await doc.getPage(i+1),v0=pg.getViewport({scale:1}),v=pg.getViewport({scale:1800/v0.width});
+    const c=document.createElement('canvas');c.width=Math.round(v.width);c.height=Math.round(v.height);
+    const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);await pg.render({canvasContext:g,viewport:v}).promise;
+    bmpCache.set(key,c);if(bmpCache.size>8)bmpCache.delete(bmpCache.keys().next().value);
+    if(!pdfLinks.has(key))pdfLinks.set(key,await readLinks(doc,pg,v0,id));
+  }catch(e){toast('このPDFのページを表示できませんでした。')}}
+/* PDFに埋め込まれたリンク（ページ移動・URL）を読み取る */
+async function readLinks(doc,pg,v0,id){const out=[],k=1000/v0.width;
+  try{for(const a of await pg.getAnnotations()){if(a.subtype!=='Link'||!a.rect)continue;
+    const[x1,y1,x2,y2]=v0.convertToViewportRectangle(a.rect),r={x:Math.min(x1,x2)*k,y:Math.min(y1,y2)*k,w:Math.abs(x2-x1)*k,h:Math.abs(y2-y1)*k};
+    if(a.url){const u=a.url;out.push({r,go:()=>{const l=document.createElement('a');l.href=u;l.target='_blank';l.rel='noopener';document.body.appendChild(l);l.click();l.remove()}});continue}
+    let dest=a.dest;if(dest==null)continue;
+    try{if(typeof dest==='string')dest=await doc.getDestination(dest);if(!Array.isArray(dest))continue;
+      const ref=dest[0],idx=typeof ref==='number'?ref:await doc.getPageIndex(ref);
+      out.push({r,go:()=>{state.pdfId=id;state.pdfPage=idx;render(true)}})}catch(e){}}}catch(e){}
+  return out}
+async function importPdf(file){if(!file)return;toast('PDFを読み込んでいます…',0);
+  try{const lib=await pdfLib();if(!lib){toast('PDF機能の読み込みに失敗しました。ネットに接続した状態でもう一度お試しください。');return}
+    const buf=await file.arrayBuffer();const doc=await lib.getDocument({data:new Uint8Array(buf.slice(0))}).promise;const sizes=[];
+    for(let i=1;i<=doc.numPages;i++){const v=(await doc.getPage(i)).getViewport({scale:1});sizes.push([v.width,v.height])}
+    const id='p'+Date.now().toString(36),meta={id,name:file.name.replace(/\.pdf$/i,''),n:doc.numPages,sizes,added:Date.now()};
+    await DB.put('pdfs',id,buf);await DB.put('pdfmeta',id,meta);pdfDocs.set(id,doc);pdfList.push(meta);
+    state.view='pdf';state.pdfId=id;state.pdfPage=0;state.fit=true;await render(true);toast(`「${meta.name}」を読み込みました（${meta.n}ページ）`);
+  }catch(e){toast('このファイルはPDFとして開けませんでした。')}}
+for(const sel of['#pdfFile','#pdfFile2'])$(sel).addEventListener('change',e=>{importPdf(e.target.files[0]);e.target.value=''});
+let delArm=false;
+$('#pdfDel').addEventListener('click',async()=>{
+  if(!delArm){delArm=true;$('#pdfDel').textContent='もう一度押すと削除します（書き込みも消えます）';return}
+  const id=state.pdfId;delArm=false;closeMenu();
+  const ks=(await DB.keys('zones'))||[];for(const k of ks)if(String(k).startsWith(`pdf:${id}:`))await DB.del('zones',k);
+  for(const k of[...zones.keys()])if(k.startsWith(`pdf:${id}:`))zones.delete(k);
+  await DB.del('pdfs',id);await DB.del('pdfmeta',id);pdfDocs.delete(id);pdfList=pdfList.filter(p=>p.id!==id);
+  undoS=undoS.filter(a=>!a.id.startsWith(`pdf:${id}:`));redoS=redoS.filter(a=>!a.id.startsWith(`pdf:${id}:`));updUndo();
+  state.pdfId=pdfList[0]?.id||null;state.pdfPage=0;render(true);toast('PDFを削除しました');
+});
+
+/* ---------- バックアップ ---------- */
+function b64(buf){const u=new Uint8Array(buf);let s='';for(let i=0;i<u.length;i+=0x8000)s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s)}
+function unb64(s){const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u.buffer}
+$('#exportBtn').addEventListener('click',async()=>{closeMenu();await flush();
+  const out={app:'tegaki-techo',v:1,at:new Date().toISOString(),zones:{},pdfs:[]};
+  for(const k of(await DB.keys('zones'))||[])out.zones[k]=await DB.get('zones',k);
+  for(const m of pdfList){const b=await DB.get('pdfs',m.id);if(b)out.pdfs.push({meta:m,data:b64(b)})}
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(out)],{type:'application/json'}));
+  a.download=`手帳バックアップ_${ymd(new Date())}.json`;document.body.appendChild(a);a.click();a.remove();
+  toast('バックアップを書き出しました。保存されない場合は、HTMLファイル版で書き出してください。')});
+$('#importFile').addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';closeMenu();if(!f)return;
+  try{const d=JSON.parse(await f.text());if(d.app!=='tegaki-techo')throw 0;let n=0;
+    for(const[k,v]of Object.entries(d.zones||{})){await DB.put('zones',k,v);if(!k.startsWith('__')){zones.set(k,v);n++}}
+    for(const p of d.pdfs||[]){if(!pdfList.some(x=>x.id===p.meta.id)){await DB.put('pdfs',p.meta.id,unb64(p.data));await DB.put('pdfmeta',p.meta.id,p.meta);pdfList.push(p.meta)}}
+    await loadEvents();undoS=[];redoS=[];updUndo();render();toast(`復元しました（${n}か所の書き込み、PDF ${d.pdfs?.length||0}件）`);
+  }catch(err){toast('このファイルは手帳のバックアップとして読み込めませんでした。')}});
+
+/* ---------- 予定 ---------- */
+const EVCOL=['#3b6fb6','#2f8a5b','#d07a1f','#c2413b','#7a57b8','#5f6b7a'];
+let evs=[];const evBoxes=new Map();
+async function loadEvents(){const v=await DB.get('zones','__events');evs=Array.isArray(v)?v:[]}
+function saveEvents(){DB.put('zones','__events',evs)}
+const dayDiff=(a,b)=>Math.round((parse(b)-parse(a))/864e5);
+function ruleHits(e,ds){const d=parse(ds),s=parse(e.date),f=(e.rep&&e.rep.f)||'none';
+  if(ds<e.date)return false;if(f==='none')return ds===e.date;if(e.rep.until&&ds>e.rep.until)return false;
+  return f==='daily'||(f==='weekdays'&&d.getDay()>=1&&d.getDay()<=5)||(f==='weekly'&&d.getDay()===s.getDay())
+    ||(f==='monthly'&&d.getDate()===s.getDate())||(f==='yearly'&&d.getDate()===s.getDate()&&d.getMonth()===s.getMonth())}
+/* その日に表示する回を返す。base は回の開始日（この日だけ削除に使う） */
+function occOn(ds){const out=[];for(const e of evs){const span=e.allDay&&e.endDate?Math.max(0,dayDiff(e.date,e.endDate)):0;
+    for(let k=0;k<=span;k++){const base=ymd(addDays(parse(ds),-k));if(ruleHits(e,base)&&!(e.ex||[]).includes(base)){out.push({e,base});break}}}
+  return out}
+const tmin=s=>{const[a,b]=s.split(':').map(Number);return a*60+b};
+const tstr=m=>`${pad(Math.floor(m/60))}:${pad(m%60)}`;
+function hexA(h,a){const n=parseInt(h.slice(1),16);return`rgba(${n>>16},${(n>>8)&255},${n&255},${a})`}
+/* 予定は時刻に関係なく、台数計のすぐ上に下から積み上げて表示する（終日→時刻の早い順） */
+const EVH=13,EVMAX=8;
+function drawEvents(c,r,zw,ds){const sc=r.w/zw,boxes=[];c.save();c.translate(r.x,r.y);c.scale(sc,sc);c.textBaseline='alphabetic';
+  const list=occOn(ds).sort((a,b)=>(b.e.allDay-a.e.allDay)||((a.e.start||'')<(b.e.start||'')?-1:(a.e.start||'')>(b.e.start||'')?1:0));
+  const over=list.length>EVMAX,shown=over?list.slice(0,EVMAX-1):list,n=shown.length+(over?1:0),top=TOT0-2-n*(EVH+1);
+  shown.forEach((o,i)=>{const y=top+i*(EVH+1),col=o.e.color||EVCOL[0],x=2,w=zw-4,title=o.e.title||'（無題）';
+    if(o.e.allDay){c.fillStyle=col;c.beginPath();c.roundRect?c.roundRect(x,y,w,EVH,3):c.rect(x,y,w,EVH);c.fill();c.fillStyle='#fff';c.font=`700 9px ${FS}`;clipText(c,title,x+4,y+9.5,w-7)}
+    else{c.fillStyle=PAPER;c.fillRect(x,y,w,EVH);c.fillStyle=hexA(col,.18);c.fillRect(x,y,w,EVH);c.fillStyle=col;c.fillRect(x,y,2.5,EVH);
+      c.font=`700 8px ${FS}`;const tt=`${o.e.start}–${o.e.end}`;c.fillText(tt,x+5,y+9.5);const tw=c.measureText(tt).width+4;c.font=`700 9px ${FS}`;clipText(c,title,x+5+tw,y+9.5,w-tw-8)}
+    boxes.push({x,y,w,h:EVH,o})});
+  if(over){const y=top+(EVMAX-1)*(EVH+1);c.fillStyle=PAPER;c.fillRect(2,y,zw-4,EVH);c.fillStyle=MUTED;c.font=`700 9px ${FS}`;c.fillText(`他${list.length-EVMAX+1}件`,5,y+9.5);boxes.push({x:2,y,w:zw-4,h:EVH,more:list.slice(EVMAX-1)})}
+  evBoxes.set(ds,boxes);c.restore()}
+function clipText(c,s,x,y,w){if(c.measureText(s).width<=w){c.fillText(s,x,y);return}let t=s;while(t.length&&c.measureText(t+'…').width>w)t=t.slice(0,-1);c.fillText(t+'…',x,y)}
+
+let ed=null;
+function eventTap(z,q){const s=z.r.w/z.zw,x=(q.x-z.r.x)/s,y=(q.y-z.r.y)/s;
+  if(!z.id.startsWith('vday:')){toast('予定は日付の列に登録できます');return}
+  const ds=z.id.slice(5),b=[...(evBoxes.get(ds)||[])].reverse().find(b=>x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.h);
+  if(b&&b.more){toast(b.more.map(o=>o.e.title||'（無題）').join('、'),5000);return}
+  if(b){openEvent(b.o.e,b.o.base);return}
+  if(y>=TOT0){toast('予定は列の上の部分をタップして登録できます');return}
+  openEvent(null,ds,{start:'09:00',end:'10:00'})}
+function openEvent(e,ds,def={}){ed={e,base:ds,color:e?e.color:EVCOL[0]};
+  $('#evHead').textContent=e?'予定を編集':'予定を追加';
+  $('#evTitle').value=e?e.title:'';$('#evAll').checked=e?!!e.allDay:!!def.allDay;
+  $('#evDate').value=e?e.date:ds;$('#evEndDate').value=e?(e.endDate||e.date):ds;
+  $('#evStart').value=e?(e.start||'09:00'):(def.start||'09:00');$('#evEnd').value=e?(e.end||'10:00'):(def.end||'10:00');
+  $('#evRep').value=e&&e.rep?e.rep.f:'none';$('#evUntil').value=e&&e.rep&&e.rep.until||'';$('#evMemo').value=e?(e.memo||''):'';
+  $('#evNote').hidden=!(e&&e.rep&&e.rep.f!=='none');
+  const acts=$('#evActs');acts.innerHTML='';const add=(txt,cls,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=txt;if(cls)b.className=cls;b.onclick=fn;acts.appendChild(b)};
+  if(e){if(e.rep&&e.rep.f!=='none'){add('この日だけ削除','danger',()=>{e.ex=[...(e.ex||[]),ed.base];saveEvents();closeEvent();drawMain();toast('この日の予定を削除しました')});
+      add('すべて削除','danger',()=>delEvent(e))}else add('削除','danger',()=>delEvent(e))}
+  add('閉じる','',closeEvent);add(e?'保存':'追加','ok',submitEvent);
+  renderEvCols();syncEvForm();showTimes();$('#evBg').hidden=false;if(!e)setTimeout(()=>$('#evTitle').focus(),50)}
+/* 時刻はボタンで15分・1時間ずつ調整する。開始を動かすと長さを保ったまま終了も動く */
+function showTimes(){for(const k of['start','end'])$(`.tstep[data-k="${k}"] output`).textContent=$(k==='start'?'#evStart':'#evEnd').value}
+function stepTime(k,d){let s=tmin($('#evStart').value||'09:00'),e=tmin($('#evEnd').value||'10:00');const len=e-s;
+  if(k==='start'){s=Math.max(0,Math.min(24*60-15,s+d));e=Math.min(24*60-1,s+len)}else e=Math.max(s+15,Math.min(24*60-1,e+d));
+  $('#evStart').value=tstr(s);$('#evEnd').value=tstr(e===24*60-1?24*60-1:e);showTimes()}
+document.querySelectorAll('.tstep').forEach(r=>r.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>stepTime(r.dataset.k,+b.dataset.d))));
+function renderEvCols(){const box=$('#evCols');box.innerHTML='';for(const col of EVCOL){const b=document.createElement('button');b.type='button';b.style.background=col;b.setAttribute('aria-label','色 '+col);b.setAttribute('aria-pressed',ed.color===col);b.onclick=()=>{ed.color=col;renderEvCols()};box.appendChild(b)}}
+function syncEvForm(){const all=$('#evAll').checked;$('#evTimes').hidden=all;$('#evEndDateL').style.visibility=all?'visible':'hidden';$('#evUntilL').style.visibility=$('#evRep').value==='none'?'hidden':'visible'}
+$('#evAll').addEventListener('change',syncEvForm);$('#evRep').addEventListener('change',syncEvForm);
+function closeEvent(){$('#evBg').hidden=true;ed=null;if(document.activeElement)document.activeElement.blur()}
+function delEvent(e){evs=evs.filter(x=>x!==e);saveEvents();closeEvent();drawMain();toast('予定を削除しました')}
+function submitEvent(){const all=$('#evAll').checked,date=$('#evDate').value;if(!date){toast('日付を入れてください');return}
+  let start=$('#evStart').value||'09:00',end=$('#evEnd').value||'10:00';if(!all&&tmin(end)<=tmin(start)){toast('終了は開始より後の時刻にしてください');return}
+  let endDate=$('#evEndDate').value||date;if(all&&endDate<date){toast('終了日は日付より後にしてください');return}
+  const f=$('#evRep').value,until=$('#evUntil').value||null;if(f!=='none'&&until&&until<date){toast('繰り返しの終了日は日付より後にしてください');return}
+  const o={id:ed.e?ed.e.id:'e'+Date.now().toString(36),title:$('#evTitle').value.trim(),allDay:all,date,color:ed.color,memo:$('#evMemo').value.trim(),
+    rep:f==='none'?null:{f,until},ex:ed.e&&ed.e.ex||[]};
+  if(all){if(endDate!==date)o.endDate=endDate}else{o.start=start;o.end=end}
+  if(ed.e){const i=evs.indexOf(ed.e);evs[i]=o}else evs.push(o);
+  saveEvents();closeEvent();drawMain()}
+$('#evCard').addEventListener('submit',e=>{e.preventDefault();submitEvent()});
+$('#evBg').addEventListener('click',e=>{if(e.target.id==='evBg')closeEvent()});
+
+/* ---------- 台数スタンプ ---------- */
+let sp=null;
+function stampTap(z,q,cx,cy,long){
+  const s=z.r.w/z.zw,x=(q.x-z.r.x)/s,y=(q.y-z.r.y)/s;
+  if(!z.id.startsWith('vday:')){toast('台数の札は日付の列に置けます');return}
+  const ex=[...strokes(z.id)].reverse().find(o=>o.t==='stamp'&&hit(o,x,y,3/s));
+  if(ex&&!long){const o={...ex,sel:!ex.sel},arr=strokes(z.id),i=arr.indexOf(ex);if(!o.sel)delete o.sel;
+    if(i>=0){arr[i]=o;markDirty(z.id);pushUndo({op:'swap',id:z.id,a:ex,b:o});drawMain()}return}
+  if(!ex&&y>=TOT0&&y<=TD0){toast('台数計の欄は自動で集計されます');return}
+  sp={z,x:Math.max(1,Math.min(x,z.zw-30)),y:Math.max(STH/2+1,y),ex,v:ex?{...ex.v}:{}};
+  const d=parse(z.id.slice(5));$('#stampDay').textContent=`${d.getMonth()+1}/${d.getDate()}（${WD[d.getDay()]}）`;
+  $('#stampOk').textContent=ex?'更新':'置く';$('#stampDel').hidden=!ex;renderRows();
+  const bg=$('#stampBg'),card=$('#stampCard');bg.hidden=false;
+  const W=card.offsetWidth,H=card.offsetHeight,vw=innerWidth,vh=innerHeight;
+  card.style.left=Math.max(16,Math.min(cx+16,vw-W-16))+'px';card.style.top=Math.max(16,Math.min(cy-H/2,vh-H-16))+'px';
+}
+function renderRows(){const box=$('#stampRows');box.innerHTML='';
+  for(const u of UNITS){const n=sp.v[u]||0,row=document.createElement('div');row.className='srow';
+    row.innerHTML=`<b>${u}</b><button aria-label="${u}を1減らす">−</button><output class="${n?'':'zero'}">${n}</output><button aria-label="${u}を1増やす">＋</button>`;
+    const[minus,plus]=row.querySelectorAll('button');minus.onclick=()=>{sp.v[u]=Math.max(0,n-1);renderRows()};plus.onclick=()=>{sp.v[u]=Math.min(99,n+1);renderRows()};box.appendChild(row)}}
+function closeStamp(){$('#stampBg').hidden=true;sp=null}
+$('#stampBg').addEventListener('click',e=>{if(e.target.id==='stampBg')closeStamp()});
+$('#stampCancel').onclick=closeStamp;
+$('#stampDel').onclick=()=>{const{z,ex}=sp,arr=strokes(z.id),i=arr.indexOf(ex);if(i>=0){arr.splice(i,1);markDirty(z.id);pushUndo({op:'del',id:z.id,st:[ex]});drawMain()}closeStamp()};
+$('#stampOk').onclick=()=>{const{z,ex}=sp,v={};for(const u of UNITS)if(sp.v[u])v[u]=sp.v[u];const arr=strokes(z.id);
+  if(!Object.keys(v).length){if(ex){const i=arr.indexOf(ex);if(i>=0){arr.splice(i,1);pushUndo({op:'del',id:z.id,st:[ex]})}}}
+  else{const o={t:'stamp',x:ex?ex.x:sp.x,y:ex?ex.y:sp.y,v,bw:+stampWidth(v).toFixed(2)};if(ex&&ex.sel)o.sel=true;
+    if(ex){const i=arr.indexOf(ex);if(i>=0){arr[i]=o;pushUndo({op:'swap',id:z.id,a:ex,b:o})}}else{arr.push(o);pushUndo({op:'add',id:z.id,st:[o]})}}
+  markDirty(z.id);drawMain();closeStamp()};
+
+function clearSel(){if(!cur)return;let n=0;
+  for(const z of cur.zones){if(!z.id.startsWith('vday:'))continue;const arr=strokes(z.id);
+    arr.forEach((s,i)=>{if(s.t==='stamp'&&s.sel){const o={...s};delete o.sel;arr[i]=o;pushUndo({op:'swap',id:z.id,a:s,b:o});n++}});if(n)markDirty(z.id)}
+  if(n){drawMain();toast('選択を解除しました')}else toast('選択中の札はありません')}
+
+/* ---------- 操作帯 ---------- */
+function go(view,d){state.view=view;if(d)state.date=ymd(d);savePrefs();render(true)}
+function step(n){if(state.view==='pdf'){const m=pdfList.find(p=>p.id===state.pdfId);if(!m)return;state.pdfPage=Math.max(0,Math.min(m.n-1,state.pdfPage+n))}
+  else state.date=ymd(addDays(parse(state.date),n*(state.view==='week'?7:1)));render(true)}
+function updateBar(){
+  const v=state.view,isPdf=v==='pdf';
+  $('#vWeek').setAttribute('aria-pressed',v==='week');$('#vDay').setAttribute('aria-pressed',v==='day');$('#vPdf').setAttribute('aria-pressed',isPdf);
+  $('#titleWrap').hidden=isPdf;$('#todayBtn').hidden=isPdf;$('#addPdf').hidden=!isPdf;
+  const m=pdfList.find(p=>p.id===state.pdfId);
+  $('#pdfSel').hidden=!isPdf||!pdfList.length;$('#pageNo').hidden=!isPdf||!m;$('#prev').hidden=$('#next').hidden=isPdf&&!m;
+  $('#pdfDel').hidden=$('#pdfDelHr').hidden=!isPdf||!m;
+  if(isPdf){const s=$('#pdfSel');s.innerHTML='';for(const p of pdfList){const o=document.createElement('option');o.value=p.id;o.textContent=p.name;s.appendChild(o)}if(m){s.value=m.id;$('#pageNo').textContent=`${state.pdfPage+1} / ${m.n}`}}
+  else{const d=parse(state.date);$('#datePick').value=state.date;
+    if(v==='week'){const a=monday(d),b=addDays(a,6);$('#title').textContent=`${a.getMonth()+1}/${a.getDate()} – ${b.getMonth()+1}/${b.getDate()}`}
+    else $('#title').textContent=`${d.getMonth()+1}月${d.getDate()}日（${WD[d.getDay()]}）`}
+  const showHint=(()=>{try{return!localStorage.getItem('tegaki-hint')}catch(e){return true}})();$('#hint').hidden=!showHint||isPdf;
+}
+function updTools(){
+  document.querySelectorAll('.tool').forEach(b=>b.setAttribute('aria-pressed',b.dataset.tool===state.tool));
+  const t=state.tool,sw=$('#swatches'),noCol=t==='eraser'||t==='stamp'||t==='event';sw.innerHTML='';
+  if(!noCol)for(const c of COLORS[t]){const b=document.createElement('button');b.className='sw';b.style.background=c;b.setAttribute('aria-label','色 '+c);b.setAttribute('aria-pressed',state.color[t]===c);b.onclick=()=>{state.color[t]=c;savePrefs();updTools()};sw.appendChild(b)}
+  sw.hidden=noCol;sw.previousElementSibling.hidden=noCol;
+  const sz=$('#sizes');sz.innerHTML='';sz.hidden=sz.previousElementSibling.hidden=t==='event';if(t==='event')return;if(t==='stamp'){const b=document.createElement('button');b.textContent='選択解除';b.style.fontSize='13px';b.style.border='1px solid var(--line)';b.onclick=clearSel;sz.appendChild(b);return}['細','中','太'].forEach((lab,i)=>{const b=document.createElement('button');b.className='sz';b.setAttribute('aria-label',lab);b.setAttribute('aria-pressed',state.size[t]===i);
+    const d=t==='pen'?[4,7,11][i]:[8,12,16][i];b.innerHTML=`<i style="width:${d}px;height:${d}px;${t==='eraser'?'background:transparent;border:1.5px solid currentColor':''}"></i>`;b.onclick=()=>{state.size[t]=i;savePrefs();updTools()};sz.appendChild(b)});
+}
+document.querySelectorAll('.tool').forEach(b=>b.addEventListener('click',()=>{state.tool=b.dataset.tool;updTools();if(state.tool==='event')toast('列をタップ：予定を追加（台数計の上にまとめて表示）／予定をタップ：編集',5000);if(state.tool==='stamp')toast('列をタップ：札を置く／札をタップ：選択（台数計に別集計）／札を長押し：修正',5000)}));
+$('#vWeek').onclick=()=>go('week');$('#vDay').onclick=()=>go('day');
+$('#vPdf').onclick=()=>{state.view='pdf';if(!state.pdfId)state.pdfId=pdfList[0]?.id||null;state.fit=true;render(true)};
+$('#prev').onclick=()=>step(-1);$('#next').onclick=()=>step(1);
+$('#todayBtn').onclick=()=>{state.date=ymd(new Date());render(true)};
+$('#datePick').addEventListener('change',e=>{if(e.target.value){state.date=e.target.value;render(true)}});
+$('#pdfSel').addEventListener('change',e=>{state.pdfId=e.target.value;state.pdfPage=0;render(true)});
+$('#undo').onclick=undo;$('#redo').onclick=redo;
+function zoomBy(f){if(!cur)return;const cx=(stage.scrollLeft+stage.clientWidth/2)/state.zoom,cy=(stage.scrollTop+stage.clientHeight/2)/state.zoom;
+  state.fit=false;state.zoom=Math.max(.3,Math.min(4,state.zoom*f));sizeCanvases();drawMain();
+  stage.scrollLeft=cx*state.zoom-stage.clientWidth/2;stage.scrollTop=cy*state.zoom-stage.clientHeight/2}
+$('#zIn').onclick=()=>zoomBy(1.25);$('#zOut').onclick=()=>zoomBy(.8);
+$('#zFit').onclick=()=>{if(!cur)return;state.fit=true;sizeCanvases();drawMain()};
+$('#hintX').onclick=()=>{try{localStorage.setItem('tegaki-hint','1')}catch(e){}$('#hint').hidden=true;if(state.fit&&cur){sizeCanvases();drawMain()}};
+function closeMenu(){$('#menu').hidden=true;$('#menuBtn').setAttribute('aria-expanded','false');delArm=false;$('#pdfDel').textContent='このPDFを削除'}
+$('#menuBtn').onclick=e=>{e.stopPropagation();const m=$('#menu');if(m.hidden){m.hidden=false;$('#menuBtn').setAttribute('aria-expanded','true')}else closeMenu()};
+$('#menu').addEventListener('click',e=>e.stopPropagation());
+document.addEventListener('click',()=>{if(!$('#menu').hidden)closeMenu()});
+function updFinger(){$('#fingerBtn').setAttribute('aria-checked',state.finger);document.body.classList.toggle('finger',state.finger)}
+$('#fingerBtn').onclick=()=>{state.finger=!state.finger;savePrefs();updFinger()};
+window.addEventListener('keydown',e=>{const typing=/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);if(typing||!$('#evBg').hidden)return;if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redo():undo()}
+  else if(e.key==='ArrowLeft'&&e.target.tagName!=='INPUT')step(-1);else if(e.key==='ArrowRight'&&e.target.tagName!=='INPUT')step(1)});
+let rzT=0;window.addEventListener('resize',()=>{clearTimeout(rzT);rzT=setTimeout(()=>{if(cur&&state.fit){sizeCanvases();drawMain()}},120)});
+let toastT=0;function toast(msg,ms=3200){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);if(ms)toastT=setTimeout(()=>t.hidden=true,ms)}
+
+/* ---------- 起動 ---------- */
+(async()=>{
+  updTools();updFinger();updUndo();
+  await DB.open();
+  if(!DB.ok)$('#storeNote').textContent='この環境では保存できません。ページを閉じると書いた内容は消えます。';
+  else{try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+    pdfList=((await DB.all('pdfmeta'))||[]).sort((a,b)=>a.added-b.added);
+    /* 台数計の欄を足した・広げたので、以前ToDo欄に書いた線や札を新しいToDo欄の位置へ移す */
+    const lv=(await DB.get('zones','__layout'))||1;
+    if(lv<3){const steps=[[2,722,38],[3,766,24]].filter(s=>lv<s[0]);
+      for(const k of(await DB.keys('zones'))||[]){if(!String(k).startsWith('vday:'))continue;
+        const a=await DB.get('zones',k);if(!Array.isArray(a))continue;let ch=false;
+        for(const[,lim,dy]of steps)for(const s of a){
+          if(s.t==='stamp'){if(s.y>=lim){s.y+=dy;ch=true}continue}
+          if(!s.p)continue;let my=1e9;for(let i=1;i<s.p.length;i+=3)my=Math.min(my,s.p[i]);if(my>=lim){for(let i=1;i<s.p.length;i+=3)s.p[i]+=dy;ch=true}}
+        if(ch)await DB.put('zones',k,a)}
+      await DB.put('zones','__layout',3)}}
+  await loadEvents();
+  await render(true);
+  if(document.fonts&&document.fonts.load){Promise.all([document.fonts.load(`700 44px ${FD}`,'0123456789月'),document.fonts.load(`700 15px ${FS}`,'月火水木金土日メモ週間今日開く連動第')]).then(()=>{if(cur)drawMain()}).catch(()=>{})}
+})();
+})();
+</script>
+<script>
+/* PWA：オフライン起動用の Service Worker（https か localhost でのみ動く） */
+if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+</script>
+</body>
+</html>
