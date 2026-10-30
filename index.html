@@ -328,9 +328,13 @@ function miniCal(c,mc,x,y,weekDays){
   c.textAlign='left';
 }
 /* 月タブ：タップでその月の1日を含む週へ */
-function monthTabs(year,cur,links,x0=820){const tabs=[],w=48,g=2,y=26,h=30;
-  for(let m=0;m<12;m++){const r={x:x0+m*(w+g),y,w,h};tabs.push({m,r});links.push({r,go:()=>{let f=new Date(year,m,1);while(isWknd(f))f=addDays(f,1);go('week',f)}})}
-  return{draw(c){c.textAlign='center';for(const t of tabs){const on=t.m===cur;
+/* 月タブは手帳の期間（2026年11月〜2027年12月の14か月）。年の変わり目のタブの上に年を小さく書く */
+const TAB_Y0=2026,TAB_M0=10,TAB_N=14;
+function monthTabs(year,cur,links,x0){const tabs=[],w=48,g=2,y=26,h=30;
+  for(let i=0;i<TAB_N;i++){const f0=new Date(TAB_Y0,TAB_M0+i,1),yy=f0.getFullYear(),m=f0.getMonth(),r={x:x0+i*(w+g),y,w,h};
+    tabs.push({m,yy,r,yl:i===0||m===0});links.push({r,go:()=>{let f=f0;while(isWknd(f))f=addDays(f,1);go('week',f)}})}
+  return{draw(c){c.textAlign='center';for(const t of tabs){const on=t.m===cur&&t.yy===year;
+    if(t.yl){c.fillStyle=MUTED;c.font=`500 9.5px ${FS}`;c.textAlign='left';c.fillText(String(t.yy),t.r.x+2,t.r.y-4);c.textAlign='center'}
     c.fillStyle=on?ACCENT:'#eef1f5';c.beginPath();c.roundRect?c.roundRect(t.r.x,t.r.y,t.r.w,t.r.h,6):c.rect(t.r.x,t.r.y,t.r.w,t.r.h);c.fill();
     c.fillStyle=on?'#ffffff':INK;c.font=`${on?700:500} 13px ${FS}`;c.fillText(`${t.m+1}月`,t.r.x+t.r.w/2,t.r.y+20)}c.textAlign='left'}}}
 function textLink(c,links,txt,xRight,y,go){c.font=`500 13px ${FS}`;const w=c.measureText(txt).width;c.fillStyle=ACCENT;c.textAlign='right';c.fillText(txt,xRight,y);c.textAlign='left';
@@ -346,7 +350,7 @@ function weekPage(d){
   const pw=addDays(mon,-7),nw=addDays(mon,7),tp=`‹ 前週 ${pw.getMonth()+1}/${pw.getDate()}`,tn=`翌週 ${nw.getMonth()+1}/${nw.getDate()} ›`;
   {const m=document.createElement('canvas').getContext('2d');m.font=`500 13px ${FS}`;const wn=m.measureText(tn).width,wp=m.measureText(tp).width;
    links.push({r:{x:1420-wn-6,y:60,w:wn+12,h:24},go:()=>go('week',nw)},{r:{x:1420-wn-24-wp-6,y:60,w:wp+12,h:24},go:()=>go('week',pw)})}
-  const tabs=monthTabs(thu.getFullYear(),thu.getMonth(),links);
+  const tabs=monthTabs(thu.getFullYear(),thu.getMonth(),links,1420-TAB_N*50);
   return{w:1460,h:1110,zones:zs,links,ev(c){for(const col of cols)drawEvents(c,col.zr,col.w,ymd(col.dd))},fg(c){for(const col of cols)drawTotals(c,col.zr,col.w,strokes('vday:'+ymd(col.dd)))},bg(c){
     const m1=mon.getMonth()+1,m2=sun.getMonth()+1;c.textBaseline='alphabetic';
     c.fillStyle=INK;c.font=`700 40px ${FD}`;const mt=m1===m2?`${m1}月`:`${m1}月 – ${m2}月`;c.fillText(mt,40,58);
@@ -373,7 +377,7 @@ function dayPage(d){
   const k=ymd(d),wk=isWknd(d),w=colW(d),links=[],cr={x:96,y:258,w:w*DSCALE,h:COLH*DSCALE},mx=cr.x+cr.w+40,mr={x:mx,y:258,w:1420-mx,h:cr.h};
   links.push({r:{x:40,y:220,w:cr.x+cr.w-40,h:30},go:()=>go('week',d)});
   const mc=miniCells(d,1186,14,234);miniLinks(mc,links);
-  const tabs=monthTabs(d.getFullYear(),d.getMonth(),links,560),prev=addDays(d,-1),next=addDays(d,1);
+  const tabs=monthTabs(d.getFullYear(),d.getMonth(),links,1170-TAB_N*50),prev=addDays(d,-1),next=addDays(d,1);
   const t2=`${next.getMonth()+1}/${next.getDate()} 翌日 ›`,t1=`‹ 前日 ${prev.getMonth()+1}/${prev.getDate()}`;
   const pg={w:1460,h:Math.ceil(cr.y+cr.h+40),zones:[{id:'vday:'+k,r:cr,zw:w,zh:COLH},{id:'vdfree:'+k,r:mr,zw:mr.w,zh:mr.h}],links,ev(c){drawEvents(c,cr,w,k)},fg(c){drawTotals(c,cr,w,strokes('vday:'+k))},bg(c){
     const col=dayColor(d);c.textBaseline='alphabetic';
