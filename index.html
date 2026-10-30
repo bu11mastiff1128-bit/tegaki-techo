@@ -578,6 +578,18 @@ function endPinch(e){if(!pinch||fingers(e).length>=2)return;const p=pinch;pinch=
   state.fit=false;state.zoom=p.z0*p.s;sizeCanvases();drawMain();
   const r=sheet.getBoundingClientRect();stage.scrollLeft+=r.left+p.px*state.zoom-p.c.x;stage.scrollTop+=r.top+p.py*state.zoom-p.c.y}
 stage.addEventListener('touchend',endPinch);stage.addEventListener('touchcancel',endPinch);
+/* ---------- 指の上下スワイプで前後の週・日へ ----------
+   スクロールが一番下の状態から上へ素早く払う＝翌週・翌日、一番上の状態から下へ払う＝前週・前日。
+   ペン・「指でも書く」オン・PDF 表示・2本指のときは移動しない */
+let swipe=null;
+stage.addEventListener('touchstart',e=>{const f=fingers(e);
+  if(f.length!==1||e.touches.length!==1||state.finger||state.view==='pdf'||!cur){swipe=null;return}
+  const t=f[0];swipe={x:t.clientX,y:t.clientY,t:Date.now(),top:stage.scrollTop<=1,bottom:stage.scrollTop+stage.clientHeight>=stage.scrollHeight-2}},{passive:true});
+stage.addEventListener('touchmove',e=>{if(swipe&&(e.touches.length!==1||pinch))swipe=null},{passive:true});
+stage.addEventListener('touchend',e=>{const sw=swipe;swipe=null;if(!sw||pinch||e.touches.length)return;const t=e.changedTouches[0];if(!t||t.touchType==='stylus')return;
+  const dx=t.clientX-sw.x,dy=t.clientY-sw.y;
+  if(Date.now()-sw.t>600||Math.abs(dy)<80||Math.abs(dx)>Math.abs(dy)*.6)return;
+  if(dy<0&&sw.bottom)step(1);else if(dy>0&&sw.top)step(-1)});
 /* Safari 標準のページ拡大は止める（紙だけを拡大縮小する） */
 document.addEventListener('gesturestart',e=>e.preventDefault());
 
