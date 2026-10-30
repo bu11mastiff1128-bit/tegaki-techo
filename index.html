@@ -468,7 +468,7 @@ function drawTotals(c,r,zw,list){const sum={kou:{},hiki:{},set:{}},sel={kou:{},h
   if(!all.length){c.fillStyle=RULE_STRONG;c.font=`500 10px ${FS}`;c.fillText('—',8,TOT0+44);c.restore();return}
   const groups=[{p:all,col:INK}];
   if(any){const rest={kou:{},hiki:{},set:{}};for(const k in rest)for(const u of UNITS)rest[k][u]=(sum[k][u]||0)-(sel[k][u]||0);
-    groups.push({p:tok(sel),col:'#c2413b'},{p:tok(rest).length?tok(rest):['0'],col:'#2f7d55'})}
+    groups.unshift({p:tok(sel),col:'#c2413b'},{p:tok(rest).length?tok(rest):['0'],col:'#2f7d55'})}
   let L=[];
   for(const[fs,sep]of[[15,'  '],[13.5,' '],[12,' '],[10.5,' ']]){c.font=`700 ${fs}px ${FS}`;L=[];
     for(const g of groups){let l=null;for(const p of g.p){const s=l==null?p:l+sep+p;if(l!=null&&c.measureText(s).width>zw-10){L.push({s:l,col:g.col});l=p}else l=s}L.push({s:l,col:g.col})}
