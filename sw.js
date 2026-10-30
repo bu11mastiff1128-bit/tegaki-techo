@@ -1,6 +1,6 @@
 /* 手書き手帳 Service Worker
    更新するときは VERSION を上げる。新しい版は次回起動時から使われ、古いキャッシュは削除される。 */
-const VERSION = 'v14';
+const VERSION = 'v15';
 const CACHE = 'tegaki-techo-' + VERSION;
 const CORE = [
   './',

@@ -435,7 +435,7 @@ const kindOf=s=>s.kind||(s.k==='out'?'hiki':s.k==='in'?'set':s.sel?'kou':'set');
 function drawStamp(c,s){const w=s.bw,y=s.y-STH/2,k=STC[s.sel?'on':'off'];c.save();c.globalAlpha=1;c.globalCompositeOperation='source-over';
   c.fillStyle=k.fill;c.strokeStyle=k.line;c.lineWidth=k.lw;c.beginPath();c.roundRect?c.roundRect(s.x,y,w,STH,4):c.rect(s.x,y,w,STH);c.fill();c.stroke();
   c.fillStyle=k.ink;c.font=STF;c.textBaseline='middle';c.fillText(KINDS[kindOf(s)].sign+stampText(s.v),s.x+5,s.y+.5);c.restore()}
-/* 台数計：1段目＝その日の全体（黒）、2段目＝タップした札の合計（濃い黄色）、3段目＝それ以外の札の合計（緑）。
+/* 台数計：1段目＝その日の全体（黒）、2段目＝タップした札の合計（赤）、3段目＝それ以外の札の合計（緑）。
    2・3段目はタップした札が1枚でもあるときだけ出す。各段とも種類ごとに分け、札と同じ記号を付ける（交換＝なし → 引上のみ＝− → 設置のみ＝＋） */
 function drawTotals(c,r,zw,list){const sum={kou:{},hiki:{},set:{}},sel={kou:{},hiki:{},set:{}};let any=false;
   for(const s of list)if(s.t==='stamp'){const k=kindOf(s);for(const u of UNITS){const n=s.v[u]||0;sum[k][u]=(sum[k][u]||0)+n;if(s.sel){sel[k][u]=(sel[k][u]||0)+n;any=true}}}
@@ -445,7 +445,7 @@ function drawTotals(c,r,zw,list){const sum={kou:{},hiki:{},set:{}},sel={kou:{},h
   if(!all.length){c.fillStyle=RULE_STRONG;c.font=`500 10px ${FS}`;c.fillText('—',8,TOT0+44);c.restore();return}
   const groups=[{p:all,col:INK}];
   if(any){const rest={kou:{},hiki:{},set:{}};for(const k in rest)for(const u of UNITS)rest[k][u]=(sum[k][u]||0)-(sel[k][u]||0);
-    groups.push({p:tok(sel),col:'#9a7b00'},{p:tok(rest).length?tok(rest):['0'],col:'#2f7d55'})}
+    groups.push({p:tok(sel),col:'#c2413b'},{p:tok(rest).length?tok(rest):['0'],col:'#2f7d55'})}
   let L=[];
   for(const[fs,sep]of[[15,'  '],[13.5,' '],[12,' '],[10.5,' ']]){c.font=`700 ${fs}px ${FS}`;L=[];
     for(const g of groups){let l=null;for(const p of g.p){const s=l==null?p:l+sep+p;if(l!=null&&c.measureText(s).width>zw-10){L.push({s:l,col:g.col});l=p}else l=s}L.push({s:l,col:g.col})}
