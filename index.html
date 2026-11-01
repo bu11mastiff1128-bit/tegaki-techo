@@ -138,6 +138,9 @@ input,textarea,select{-webkit-user-select:text;user-select:text}
 .sacts{display:flex;gap:6px;margin-top:6px}
 .sacts button{flex:1;min-height:40px;background:var(--chip);font-weight:500}
 .sacts .ok{background:var(--accent);color:var(--accent-ink)}
+#copyBar{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);display:flex;align-items:center;gap:12px;background:var(--fg);color:var(--bar);padding:8px 8px 8px 16px;border-radius:10px;font-size:13.5px;max-width:calc(100vw - 32px);z-index:19}
+#copyBar[hidden]{display:none}
+#copyBar button{min-height:36px;padding:0 14px;background:var(--accent);color:var(--accent-ink);font-weight:500;flex:none}
 #toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bar);padding:10px 16px;border-radius:10px;font-size:13.5px;max-width:calc(100vw - 32px);z-index:20;line-height:1.5}
 .vis{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 @media (max-width:520px){.seg button{padding:0 9px}.title{font-size:15px}.hide-sm{display:none}}
@@ -172,6 +175,7 @@ input,textarea,select{-webkit-user-select:text;user-select:text}
       <button class="tool" data-tool="eraser" aria-pressed="false" aria-label="消しゴム"><svg viewBox="0 0 24 24"><path d="M8 20h12"/><path d="M4.6 14.6l9-9a2 2 0 012.8 0l3 3a2 2 0 010 2.8L11.8 19H8.2l-3.6-3.6a.6.6 0 010-.8z"/><path d="M9 10l5 5"/></svg><span class="hide-sm">消しゴム</span></button>
       <button class="tool" data-tool="stamp" aria-pressed="false" aria-label="台数"><svg viewBox="0 0 24 24"><rect x="3.5" y="7" width="17" height="10" rx="3"/><path d="M8 10.5v3M11 12h2M16 10.5v3"/></svg><span class="hide-sm">台数</span></button>
       <button class="tool" data-tool="event" aria-pressed="false" aria-label="予定"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4M12 13v5M9.5 15.5h5"/></svg><span class="hide-sm">予定</span></button>
+      <button class="tool" data-tool="carry" aria-pressed="false" aria-label="繰越"><svg viewBox="0 0 24 24"><path d="M4 6h9a5 5 0 015 5v7"/><path d="M14 14l4 4 4-4"/></svg><span class="hide-sm">繰越</span></button>
       <span class="sep"></span>
       <span id="swatches" class="tools"></span>
       <span class="sep"></span>
@@ -241,7 +245,8 @@ input,textarea,select{-webkit-user-select:text;user-select:text}
   <div class="clkacts"><button type="button" id="clkCancel">キャンセル</button><button type="button" id="clkOk" class="ok">OK</button></div>
 </div></div>
 <div id="stampBg" hidden><div id="stampCard" role="dialog" aria-label="台数"><h3>台数<span id="stampDay"></span></h3><div class="stype" role="radiogroup" aria-label="種類"><button type="button" role="radio" data-k="set">設置のみ</button><button type="button" role="radio" data-k="kou">交換</button><button type="button" role="radio" data-k="hiki">引上のみ</button></div><div id="stampRows"></div>
-<div class="sacts"><button id="stampDel" class="danger">削除</button><button id="stampCancel">閉じる</button><button id="stampOk" class="ok">置く</button></div></div></div>
+<div class="sacts"><button id="stampDel" class="danger">削除</button><button id="stampCopy">コピー</button><button id="stampCancel">閉じる</button><button id="stampOk" class="ok">置く</button></div></div></div>
+<div id="copyBar" hidden><span id="copyText"></span><button id="copyDone">完了</button></div>
 <div id="toast" hidden></div>
 
 <script>
@@ -548,12 +553,12 @@ function eraseEvt(e){const evs=(e.getCoalescedEvents&&e.getCoalescedEvents().len
 ov.addEventListener('pointerdown',e=>{
   if(!cur||act||pinch)return;
   if(e.pointerType==='mouse'&&e.button!==0)return;
-  closeMenu();const q=pt(e),canDraw=e.pointerType!=='touch'||state.finger||state.tool==='stamp'||state.tool==='event';
+  closeMenu();const q=pt(e),canDraw=e.pointerType!=='touch'||state.finger||state.tool==='stamp'||state.tool==='event'||state.tool==='carry';
   const link=[...cur.links].reverse().find(l=>inR(q,l.r));
   if(link){act={mode:'link',link,q0:q,id:e.pointerId,first:e,canDraw};if(canDraw)ov.setPointerCapture(e.pointerId);return}
   if(!canDraw)return;
   const z=cur.zones.find(z=>inR(q,z.r));if(!z)return;
-  if(state.tool==='event'){act={mode:'evtap',z,q0:q,id:e.pointerId};return}
+  if(state.tool==='event'||state.tool==='carry'){act={mode:'evtap',z,q0:q,id:e.pointerId};return}
   if(state.tool==='stamp'){const a={mode:'stamp',z,q0:q,id:e.pointerId,cx:e.clientX,cy:e.clientY};act=a;
     a.timer=setTimeout(()=>{if(act===a){act=null;stampTap(a.z,a.q0,a.cx,a.cy,true)}},500);return}
   e.preventDefault();ov.setPointerCapture(e.pointerId);startStroke(z,q,e);
@@ -565,7 +570,7 @@ function startStroke(z,q,e){const s=z.r.w/z.zw;
 ov.addEventListener('pointermove',e=>{
   if(!act||e.pointerId!==act.id)return;
   if(act.mode==='link'){const q=pt(e);if(Math.hypot(q.x-act.q0.x,q.y-act.q0.y)<12)return;
-    const a=act;act=null;if(!a.canDraw||state.tool==='stamp'||state.tool==='event')return;const z=cur.zones.find(z=>inR(a.q0,z.r));if(!z)return;
+    const a=act;act=null;if(!a.canDraw||state.tool==='stamp'||state.tool==='event'||state.tool==='carry')return;const z=cur.zones.find(z=>inR(a.q0,z.r));if(!z)return;
     startStroke(z,a.q0,a.first);if(act.mode==='draw'){addPts(e);drawOverlay()}else eraseEvt(e);return}
   if(act.mode==='evtap'){const q=pt(e);if(Math.hypot(q.x-act.q0.x,q.y-act.q0.y)>12)act=null;return}
   if(act.mode==='stamp'){const q=pt(e);if(Math.hypot(q.x-act.q0.x,q.y-act.q0.y)>12){clearTimeout(act.timer);act=null}return}
@@ -575,7 +580,7 @@ ov.addEventListener('pointermove',e=>{
 function endPointer(e){
   if(!act||e.pointerId!==act.id)return;const a=act;act=null;
   if(a.mode==='link'){const q=pt(e);if(e.type==='pointerup'&&Math.hypot(q.x-a.q0.x,q.y-a.q0.y)<14)a.link.go();return}
-  if(a.mode==='evtap'){if(e.type==='pointerup')eventTap(a.z,a.q0);return}
+  if(a.mode==='evtap'){if(e.type==='pointerup')(state.tool==='carry'?carryTap:eventTap)(a.z,a.q0);return}
   if(a.mode==='stamp'){clearTimeout(a.timer);if(e.type==='pointerup')stampTap(a.z,a.q0,a.cx,a.cy,false);return}
   if(a.mode==='draw'&&a.st.p.length&&state.scrib&&a.st.t==='pen'&&scribbleErase(a.z.id,a.st)){octx.setTransform(1,0,0,1,0,0);octx.clearRect(0,0,ov.width,ov.height);return}
   if(a.mode==='draw'&&a.st.p.length){strokes(a.z.id).push(a.st);markDirty(a.z.id);pushUndo({op:'add',id:a.z.id,st:[a.st]});drawMain()}
@@ -624,10 +629,12 @@ document.addEventListener('gesturestart',e=>e.preventDefault());
 /* ---------- 元に戻す ---------- */
 function pushUndo(a){undoS.push(a);if(undoS.length>200)undoS.shift();redoS=[];updUndo()}
 function apply(a,inverse){const arr=strokes(a.id);
+  if(a.op==='move'){const[fi,ti,add,rem]=inverse?[a.to,a.id,a.a,a.b]:[a.id,a.to,a.b,a.a],fa=strokes(fi);  // ToDoの繰越：2つの日にまたがる
+    for(const s of rem){const i=fa.indexOf(s);if(i>=0)fa.splice(i,1)}strokes(ti).push(...add);markDirty(fi);markDirty(ti);return}
   if(a.op==='swap'){const[f,to]=inverse?[a.b,a.a]:[a.a,a.b],i=arr.indexOf(f);if(i>=0)arr[i]=to;markDirty(a.id);return}const adding=(a.op==='add')!==inverse;
   if(adding)arr.push(...a.st);else for(const s of a.st){const i=arr.indexOf(s);if(i>=0)arr.splice(i,1)}markDirty(a.id)}
-async function undo(){const a=undoS.pop();if(!a)return;await ensureZones([a.id]);apply(a,true);redoS.push(a);drawMain();updUndo()}
-async function redo(){const a=redoS.pop();if(!a)return;await ensureZones([a.id]);apply(a,false);undoS.push(a);drawMain();updUndo()}
+async function undo(){const a=undoS.pop();if(!a)return;await ensureZones(a.to?[a.id,a.to]:[a.id]);apply(a,true);redoS.push(a);drawMain();updUndo()}
+async function redo(){const a=redoS.pop();if(!a)return;await ensureZones(a.to?[a.id,a.to]:[a.id]);apply(a,false);undoS.push(a);drawMain();updUndo()}
 function updUndo(){$('#undo').disabled=!undoS.length;$('#redo').disabled=!redoS.length}
 
 /* ---------- PDF ---------- */
@@ -887,16 +894,21 @@ $('#evBg').addEventListener('click',e=>{if(e.target.id==='evBg')closeEvent()});
 
 /* ---------- 台数スタンプ ---------- */
 let sp=null;
+let stClip=null;   // コピー中の札。貼り付けは stampTap で受ける
+function copyEnd(){stClip=null;$('#copyBar').hidden=true}
 function stampTap(z,q,cx,cy,long){
   const s=z.r.w/z.zw,x=(q.x-z.r.x)/s,y=(q.y-z.r.y)/s;
   if(!z.id.startsWith('vday:')){toast('台数の札は日付の列に置けます');return}
+  if(stClip){if(y>=TOT0){toast('台数の札は台数計より上の欄に置けます');return}
+    const{v,kind}=stClip,o={t:'stamp',x:z.zw-30,y:snapStampY(Math.max(STH/2+1,y),rowGap(z.zw,z.id.slice(5))),v:{...v},bw:+stampWidth(v,kind).toFixed(2),kind};
+    strokes(z.id).push(o);markDirty(z.id);pushUndo({op:'add',id:z.id,st:[o]});drawMain();return}
   const ex=[...strokes(z.id)].reverse().find(o=>o.t==='stamp'&&hit(o,x,y,3/s));
   if(ex&&!long){const o={...ex},arr=strokes(z.id),i=arr.indexOf(ex);if(ex.sel)delete o.sel;else o.sel=true;  // タップは色（青⇔オレンジ）だけ。種類は変えない
     if(i>=0){arr[i]=o;markDirty(z.id);pushUndo({op:'swap',id:z.id,a:ex,b:o});drawMain()}return}
   if(!ex&&y>=TOT0){toast('台数の札は台数計より上の欄に置けます');return}
   sp={z,x:z.zw-30,y:snapStampY(Math.max(STH/2+1,y),rowGap(z.zw,z.id.slice(5))),ex,v:ex?{...ex.v}:{},kind:ex?kindOf(ex):'kou'};showType();
   const d=parse(z.id.slice(5));$('#stampDay').textContent=`${d.getMonth()+1}/${d.getDate()}（${WD[d.getDay()]}）`;
-  $('#stampOk').textContent=ex?'更新':'置く';$('#stampDel').hidden=!ex;renderRows();
+  $('#stampOk').textContent=ex?'更新':'置く';$('#stampDel').hidden=$('#stampCopy').hidden=!ex;renderRows();
   const bg=$('#stampBg'),card=$('#stampCard');bg.hidden=false;
   const W=card.offsetWidth,H=card.offsetHeight,vw=innerWidth,vh=innerHeight;
   card.style.left=Math.max(16,Math.min(cx+16,vw-W-16))+'px';card.style.top=Math.max(16,Math.min(cy-H/2,vh-H-16))+'px';
@@ -911,11 +923,33 @@ function closeStamp(){$('#stampBg').hidden=true;sp=null}
 $('#stampBg').addEventListener('click',e=>{if(e.target.id==='stampBg')closeStamp()});
 $('#stampCancel').onclick=closeStamp;
 $('#stampDel').onclick=()=>{const{z,ex}=sp,arr=strokes(z.id),i=arr.indexOf(ex);if(i>=0){arr.splice(i,1);markDirty(z.id);pushUndo({op:'del',id:z.id,st:[ex]});drawMain()}closeStamp()};
+$('#stampCopy').onclick=()=>{const{ex}=sp;stClip={v:{...ex.v},kind:kindOf(ex)};closeStamp();$('#toast').hidden=true;
+  $('#copyText').textContent=`${KINDS[stClip.kind].sign+stampText(stClip.v)} をコピー中：貼り付ける行をタップ`;$('#copyBar').hidden=false};
+$('#copyDone').onclick=copyEnd;
 $('#stampOk').onclick=()=>{const{z,ex}=sp,v={};for(const u of UNITS)if(sp.v[u])v[u]=sp.v[u];const arr=strokes(z.id);
   if(!Object.keys(v).length){if(ex){const i=arr.indexOf(ex);if(i>=0){arr.splice(i,1);pushUndo({op:'del',id:z.id,st:[ex]})}}}
   else{const o={t:'stamp',x:ex?ex.x:sp.x,y:ex?ex.y:sp.y,v,bw:+stampWidth(v,sp.kind).toFixed(2),kind:sp.kind};if(ex&&ex.sel)o.sel=true;
     if(ex){const i=arr.indexOf(ex);if(i>=0){arr[i]=o;pushUndo({op:'swap',id:z.id,a:ex,b:o})}}else{arr.push(o);pushUndo({op:'add',id:z.id,st:[o]})}}
   markDirty(z.id);drawMain();closeStamp()};
+
+/* ---------- ToDoの繰越 ----------
+   行は下線ごとの帯（高さ23）。線の中心が入る帯を、その線の行とする */
+const TDROWS=6,TDRH=23,TDY0=TD0+12;
+const todoRow=st=>{let a=1/0,b=-1/0;for(let i=1;i<st.p.length;i+=3){a=Math.min(a,st.p[i]);b=Math.max(b,st.p[i])}const k=Math.floor(((a+b)/2-TDY0)/TDRH);return k<0?-1:Math.min(k,TDROWS-1)};
+let carrying=false;
+async function carryTap(z,q){
+  if(carrying)return;
+  const s=z.r.w/z.zw,y=(q.y-z.r.y)/s;
+  if(!z.id.startsWith('vday:')||y<TDY0){toast('ToDoの行をタップしてください');return}
+  const k=Math.min(Math.floor((y-TDY0)/TDRH),TDROWS-1),from=strokes(z.id),rows=a=>a.filter(o=>o.t!=='stamp'),moved=rows(from).filter(o=>todoRow(o)===k);
+  if(!moved.length){toast('この行には何も書かれていません');return}
+  const ds=z.id.slice(5),nd=addDays(parse(ds),1),to='vday:'+ymd(nd),label=`${nd.getMonth()+1}/${nd.getDate()}（${WD[nd.getDay()]}）`;
+  carrying=true;await ensureZones([to]);carrying=false;
+  const used=new Set(rows(strokes(to)).map(todoRow));let t=0;while(t<TDROWS&&used.has(t))t++;
+  if(t===TDROWS){toast(`${label}のToDoは埋まっています`);return}
+  const f=Math.min(1,colW(nd)/z.zw),dy=(t-k)*TDRH;
+  const b=moved.map(o=>({...o,p:o.p.map((v,i)=>i%3===0?+(v*f).toFixed(2):i%3===1?+(v+dy).toFixed(2):v)}));
+  const a={op:'move',id:z.id,to,a:moved,b};apply(a,false);pushUndo(a);drawMain();toast(`${label}へ繰り越しました`)}
 
 /* ---------- 操作帯 ---------- */
 function go(view,d){state.view=view;if(d)state.date=ymd(d);savePrefs();render(true)}
@@ -936,13 +970,13 @@ function updateBar(){
 }
 function updTools(){
   document.querySelectorAll('.tool').forEach(b=>b.setAttribute('aria-pressed',b.dataset.tool===state.tool));
-  const t=state.tool,sw=$('#swatches'),noCol=t==='eraser'||t==='stamp'||t==='event';sw.innerHTML='';
+  const t=state.tool,sw=$('#swatches'),noCol=t==='eraser'||t==='stamp'||t==='event'||t==='carry';sw.innerHTML='';
   if(!noCol)for(const c of COLORS[t]){const b=document.createElement('button');b.className='sw';b.style.background=c;b.setAttribute('aria-label','色 '+c);b.setAttribute('aria-pressed',state.color[t]===c);b.onclick=()=>{state.color[t]=c;savePrefs();updTools()};sw.appendChild(b)}
   sw.hidden=noCol;sw.previousElementSibling.hidden=noCol;
-  const sz=$('#sizes');sz.innerHTML='';sz.hidden=sz.previousElementSibling.hidden=t==='event';if(t==='event')return;if(t==='stamp'){sz.hidden=sz.previousElementSibling.hidden=true;return}['細','中','太'].forEach((lab,i)=>{const b=document.createElement('button');b.className='sz';b.setAttribute('aria-label',lab);b.setAttribute('aria-pressed',state.size[t]===i);
+  const sz=$('#sizes');sz.innerHTML='';sz.hidden=sz.previousElementSibling.hidden=t==='event';if(t==='event')return;if(t==='stamp'||t==='carry'){sz.hidden=sz.previousElementSibling.hidden=true;return}['細','中','太'].forEach((lab,i)=>{const b=document.createElement('button');b.className='sz';b.setAttribute('aria-label',lab);b.setAttribute('aria-pressed',state.size[t]===i);
     const d=t==='pen'?[4,7,11][i]:[8,12,16][i];b.innerHTML=`<i style="width:${d}px;height:${d}px;${t==='eraser'?'background:transparent;border:1.5px solid currentColor':''}"></i>`;b.onclick=()=>{state.size[t]=i;savePrefs();updTools()};sz.appendChild(b)});
 }
-document.querySelectorAll('.tool').forEach(b=>b.addEventListener('click',()=>{state.tool=b.dataset.tool;updTools();if(state.tool==='event')toast('列をタップ：予定を追加（台数計の上にまとめて表示）／予定をタップ：編集',5000);if(state.tool==='stamp')toast('列をタップ：札を置く／札をタップ：色を切替（青⇔黄）／札を長押し：修正',5000)}));
+document.querySelectorAll('.tool').forEach(b=>b.addEventListener('click',()=>{state.tool=b.dataset.tool;if(state.tool!=='stamp')copyEnd();updTools();if(state.tool==='carry')toast('ToDoの行をタップ：翌日の空いている行へ移す',5000);if(state.tool==='event')toast('列をタップ：予定を追加（台数計の上にまとめて表示）／予定をタップ：編集',5000);if(state.tool==='stamp')toast('列をタップ：札を置く／札をタップ：色を切替（青⇔黄）／札を長押し：修正・コピー',5000)}));
 $('#vWeek').onclick=()=>go('week');$('#vDay').onclick=()=>go('day');
 $('#vPdf').onclick=()=>{state.view='pdf';if(!state.pdfId)state.pdfId=pdfList[0]?.id||null;state.fit=true;render(true)};
 $('#prev').onclick=()=>step(-1);$('#next').onclick=()=>step(1);
