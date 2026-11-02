@@ -618,7 +618,8 @@ ov.addEventListener('pointerdown',e=>{
     if(lasso&&inR(q,lasso.box)){act={mode:'ldrag',q0:q,id:e.pointerId,dx:0,dy:0};return}
     lassoEnd();act={mode:'lasso',pts:[q.x,q.y],id:e.pointerId};return}
   const z=cur.zones.find(z=>inR(q,z.r));if(!z)return;
-  if(state.tool==='event'||state.tool==='carry'){act={mode:'evtap',z,q0:q,id:e.pointerId};return}
+  if(state.tool==='event'||state.tool==='carry'){act={mode:'evtap',z,q0:q,id:e.pointerId};
+    if(state.tool==='event'&&state.view==='week'){const b=evBoxAt(z,q);if(b&&b.o&&!b.o.g)act.ev=b.o}return}
   if(state.tool==='stamp'){const a={mode:'stamp',z,q0:q,id:e.pointerId,cx:e.clientX,cy:e.clientY};act=a;
     a.timer=setTimeout(()=>{if(act===a){act=null;stampTap(a.z,a.q0,a.cx,a.cy,true)}},500);return}
   e.preventDefault();ov.setPointerCapture(e.pointerId);startStroke(z,q,e);
@@ -635,7 +636,8 @@ ov.addEventListener('pointermove',e=>{
   if(act.mode==='lasso'){const q=pt(e);act.pts.push(q.x,q.y);drawLassoLine(act.pts);return}
   if(act.mode==='ldrag'){const q=pt(e);act.dx=q.x-act.q0.x;act.dy=q.y-act.q0.y;drawLasso(act.dx,act.dy);return}
   if(act.mode==='lpaste')return;
-  if(act.mode==='evtap'){const q=pt(e);if(Math.hypot(q.x-act.q0.x,q.y-act.q0.y)>12)act=null;return}
+  if(act.mode==='evtap'){const q=pt(e);if(act.drag||(act.ev&&Math.hypot(q.x-act.q0.x,q.y-act.q0.y)>12)){act.drag=true;drawEvDrag(act.ev,q);return}
+    if(Math.hypot(q.x-act.q0.x,q.y-act.q0.y)>12)act=null;return}
   if(act.mode==='stamp'){const q=pt(e);if(Math.hypot(q.x-act.q0.x,q.y-act.q0.y)>12){clearTimeout(act.timer);act=null}return}
   if(act.mode==='draw'){addPts(e);if(!raf)raf=requestAnimationFrame(drawOverlay)}
   else if(act.mode==='erase')eraseEvt(e);
@@ -643,7 +645,8 @@ ov.addEventListener('pointermove',e=>{
 function endPointer(e){
   if(!act||e.pointerId!==act.id)return;const a=act;act=null;
   if(a.mode==='link'){const q=pt(e);if(e.type==='pointerup'&&Math.hypot(q.x-a.q0.x,q.y-a.q0.y)<14)a.link.go();return}
-  if(a.mode==='evtap'){if(e.type==='pointerup')(state.tool==='carry'?carryTap:eventTap)(a.z,a.q0);return}
+  if(a.mode==='evtap'){if(a.drag){clearOv();if(e.type==='pointerup')eventDrop(a,pt(e));return}
+    if(e.type==='pointerup')(state.tool==='carry'?carryTap:eventTap)(a.z,a.q0);return}
   if(a.mode==='lasso'){if(e.type==='pointerup')lassoFinish(a.pts);else clearOv();return}
   if(a.mode==='ldrag'){if(e.type==='pointerup'&&Math.hypot(a.dx,a.dy)>4&&lassoPlace(lasso.box.x+a.dx,lasso.box.y+a.dy,1))return;drawLasso(0,0);return}
   if(a.mode==='lpaste'){if(e.type==='pointerup')lassoPaste(a.q0);return}
@@ -655,7 +658,7 @@ function endPointer(e){
 }
 ov.addEventListener('pointerup',endPointer);ov.addEventListener('pointercancel',endPointer);
 /* iPadのSafariでペンの動きがスクロールにならないようにする */
-const stopStylus=e=>{if(state.finger||[...e.touches].some(t=>t.touchType==='stylus'))e.cancelable&&e.preventDefault()};
+const stopStylus=e=>{if(state.finger||(act&&act.ev)||[...e.touches].some(t=>t.touchType==='stylus'))e.cancelable&&e.preventDefault()};
 ov.addEventListener('touchstart',stopStylus,{passive:false});ov.addEventListener('touchmove',stopStylus,{passive:false});
 
 /* ---------- 指2本で拡大縮小 ----------
@@ -664,7 +667,7 @@ let pinch=null;
 const fingers=e=>[...e.touches].filter(t=>t.touchType!=='stylus');
 const mid=(a,b)=>({x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2}),dist=(a,b)=>Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
 stage.addEventListener('touchstart',e=>{const f=fingers(e);if(!cur||pinch||f.length!==2)return;
-  if(act){clearTimeout(act.timer);if(act.mode==='erase'&&act.removed.length)pushUndo({op:'del',id:act.z.id,st:act.removed});act=null;octx.setTransform(1,0,0,1,0,0);octx.clearRect(0,0,ov.width,ov.height)}
+  if(act){clearTimeout(act.timer);if(act.drag)clearOv();if(act.mode==='erase'&&act.removed.length)pushUndo({op:'del',id:act.z.id,st:act.removed});act=null;octx.setTransform(1,0,0,1,0,0);octx.clearRect(0,0,ov.width,ov.height)}
   const r=sheet.getBoundingClientRect(),c=mid(f[0],f[1]),z0=state.zoom;
   pinch={d0:dist(f[0],f[1])||1,c0:c,c:c,z0,s:1,px:(c.x-r.left)/z0,py:(c.y-r.top)/z0};
   sheet.style.transformOrigin=`${pinch.px*z0}px ${pinch.py*z0}px`;e.preventDefault()},{passive:false});
@@ -682,7 +685,7 @@ stage.addEventListener('touchend',endPinch);stage.addEventListener('touchcancel'
    ペン・「指でも書く」オン・PDF 表示・2本指のときは移動しない */
 let swipe=null;
 stage.addEventListener('touchstart',e=>{const f=fingers(e);
-  if(f.length!==1||e.touches.length!==1||state.finger||state.view==='pdf'||!cur){swipe=null;return}
+  if(f.length!==1||e.touches.length!==1||state.finger||state.view==='pdf'||!cur||(act&&act.ev)){swipe=null;return}
   const t=f[0];swipe={x:t.clientX,y:t.clientY,t:Date.now(),top:stage.scrollTop<=10,bottom:stage.scrollTop+stage.clientHeight>=stage.scrollHeight-10}},{passive:true});
 stage.addEventListener('touchmove',e=>{if(swipe&&(e.touches.length!==1||pinch))swipe=null},{passive:true});
 stage.addEventListener('touchend',e=>{const sw=swipe;swipe=null;if(!sw||pinch||e.touches.length)return;const t=e.changedTouches[0];if(!t||t.touchType==='stylus')return;
@@ -882,13 +885,27 @@ $('#gClose').onclick=()=>{$('#gBg').hidden=true};
 $('#gBg').addEventListener('click',e=>{if(e.target.id==='gBg')$('#gBg').hidden=true});
 
 let ed=null;
-function eventTap(z,q){const s=z.r.w/z.zw,x=(q.x-z.r.x)/s,y=(q.y-z.r.y)/s;
+function evBoxAt(z,q){if(!z.id.startsWith('vday:'))return null;const s=z.r.w/z.zw,x=(q.x-z.r.x)/s,y=(q.y-z.r.y)/s;
+  return[...(evBoxes.get(z.id.slice(5))||[])].reverse().find(b=>x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.h)||null}
+function eventTap(z,q){const s=z.r.w/z.zw,y=(q.y-z.r.y)/s;
   if(!z.id.startsWith('vday:')){toast('予定は日付の列に登録できます');return}
-  const ds=z.id.slice(5),b=[...(evBoxes.get(ds)||[])].reverse().find(b=>x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.h);
+  const ds=z.id.slice(5),b=evBoxAt(z,q);
   if(b&&b.more){toast(b.more.map(o=>(o.g?'G ':'')+(o.e.title||'（無題）')).join('、'),5000);return}
   if(b){b.o.g?showG(b.o.e):openEvent(b.o.e,b.o.base);return}
   if(y>=TOT0){toast('予定は列の上の部分をタップして登録できます');return}
   openEvent(null,ds,{start:'09:00',end:'10:00'})}
+/* 週間ページで予定を別の日の列へ動かす。日付だけが変わる。繰り返しは動かした回だけを別の予定にする */
+const evDayZone=q=>cur.zones.find(z=>z.id.startsWith('vday:')&&inR(q,z.r));
+function drawEvDrag(o,q){clearOv();octx.setTransform(K,0,0,K,0,0);const z=evDayZone(q);
+  if(z){octx.fillStyle=hexA(ACCENT,.1);octx.fillRect(z.r.x,z.r.y,z.r.w,z.r.h)}
+  const s=cur.zones[0].r.w/cur.zones[0].zw,w=cur.zones[0].r.w-4*s,h=EVH*s*1.3,x=q.x-w/2,y=q.y-h/2,col=o.e.color||EVCOL[0];
+  octx.fillStyle=col;octx.globalAlpha=.9;octx.fillRect(x,y,w,h);octx.globalAlpha=1;octx.fillStyle='#fff';octx.font=`700 ${9*s}px ${FS}`;octx.textBaseline='middle';clipText(octx,o.e.title||'（無題）',x+4,y+h/2,w-8);octx.textBaseline='alphabetic'}
+function eventDrop(a,q){const z=evDayZone(q);if(!z)return;const n=dayDiff(a.z.id.slice(5),z.id.slice(5));if(!n)return;
+  const{e,base}=a.ev,to=ymd(addDays(parse(base),n)),shift=x=>ymd(addDays(parse(x),n));
+  if(e.rep){const c={...e,id:'e'+Date.now().toString(36),date:to,rep:null,ex:[]};if(e.endDate)c.endDate=ymd(addDays(parse(e.endDate),n+dayDiff(e.date,base)));
+    e.ex=[...(e.ex||[]),base];evs.push(c)}
+  else{e.date=to;if(e.endDate)e.endDate=shift(e.endDate)}
+  saveEvents();drawMain();const d=parse(to);toast(`${d.getMonth()+1}/${d.getDate()}（${WD[d.getDay()]}）へ移動しました`+(e.rep?'（この回だけ）':''))}
 function openEvent(e,ds,def={}){ed={e,base:ds,color:e?e.color:EVCOL[0]};
   $('#evHead').textContent=e?'予定を編集':'予定を追加';
   $('#evTitle').value=e?e.title:'';$('#evAll').checked=e?!!e.allDay:!!def.allDay;
