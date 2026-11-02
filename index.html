@@ -335,7 +335,7 @@ let pdfList=[]; const pdfDocs=new Map(), bmpCache=new Map(), pdfLinks=new Map();
 let cur=null, K=1, undoS=[], redoS=[];
 
 /* ---------- ページ定義（週間バーチカル・横向き。土日の時間帯は方眼） ---------- */
-const TODAY_TINT='#e6f5e9', WEEK_TINT='#eef3fa', RULE_STRONG='#aeb7c4', GRID='#d3e0ec';
+const TODAY_TINT='#eef3fa', RULE_STRONG='#aeb7c4', GRID='#d3e0ec';
 const COLH=950, ALLD=46, T0=50, H0=6, HOURS=18, HH=670/18, TOT0=720, TD0=792;   // 1日の縦列（ゾーン単位）。TOT0〜TD0が台数の合計欄
 const COLW=164.5, DSCALE=2.2;                                             // 平日列の幅とデイリーでの拡大率
 const isWknd=d=>d.getDay()===0||d.getDay()===6;
@@ -379,7 +379,7 @@ function miniCal(c,mc,x,y,weekDays){
   '月火水木金土日'.split('').forEach((t,i)=>{c.fillStyle=i===5?SAT:i===6?SUN:MUTED;c.fillText(t,x+mc.cw*(i+1)+mc.cw/2,y+36)});
   const wk=new Set(weekDays.map(ymd)),today=ymd(new Date());
   for(const k of mc.weeks){c.fillStyle='#e6ebf3';c.fillRect(k.x+2,k.y+2,k.w-4,k.h-4);c.fillStyle=ACCENT;c.font=`700 10.5px ${FS}`;c.fillText(String(isoWeek(k.mon)),k.x+k.w/2,k.y+14.5)}
-  for(const k of mc.cells){if(wk.has(ymd(k.d))){c.fillStyle=WEEK_TINT;c.fillRect(k.x,k.y,k.w,k.h)}
+  for(const k of mc.cells){if(wk.has(ymd(k.d))){c.fillStyle=TODAY_TINT;c.fillRect(k.x,k.y,k.w,k.h)}
     if(ymd(k.d)===today){c.strokeStyle=ACCENT;c.lineWidth=1.2;c.beginPath();c.arc(k.x+k.w/2,k.y+k.h/2,9,0,7);c.stroke()}
     c.fillStyle=dayColor(k.d);c.font=`500 12px ${FS}`;c.fillText(String(k.d.getDate()),k.x+k.w/2,k.y+15)}
   c.textAlign='left';
@@ -501,14 +501,15 @@ function pdfPageDef(){
 /* ---------- 描画 ---------- */
 const cv=$('#cv'),ov=$('#ov'),ctx=cv.getContext('2d'),octx=ov.getContext('2d'),sheet=$('#sheet'),stage=$('#stage');
 /* 台数の札 */
-const stampText=v=>UNITS.filter(u=>v[u]).map(u=>u+v[u]).join('・');
-const stampLabel=(v,k)=>(k&&UNITS.some(u=>v[u]&&!EXTRAS.includes(u))?KINDS[k].sign:'')+stampText(v);  // BD・DC・カゴだけの札に記号は付けない
+const unitText=(u,n,k)=>k==='set'&&!EXTRAS.includes(u)?u+'+'+n:u+n;  // 設置のみは「L+1」の形
+const stampText=(v,k)=>UNITS.filter(u=>v[u]).map(u=>unitText(u,v[u],k)).join('・');
+const stampLabel=(v,k)=>(k&&UNITS.some(u=>v[u]&&!EXTRAS.includes(u))?KINDS[k].sign:'')+stampText(v,k);  // BD・DC・カゴだけの札に記号は付けない
 const STF=`700 9.5px ${FS}`,STH=14,TDF=`500 11.5px ${FS}`;
 const measCtx=document.createElement('canvas').getContext('2d');
 function stampWidth(v,k){measCtx.font=STF;return measCtx.measureText(stampLabel(v,k)).width+10}
 /* 札の種類：set＝設置のみ（青）、kou＝交換（オレンジ）、hiki＝引上のみ（緑）。古い札の sel:true は交換として扱う */
-/* 札の色は種類と関係なく、青＝そのまま、薄い黄色＝タップした札（sel:true）。設置のみは頭に「＋」、引上のみは頭に「−」を付けて見分ける。緑は使わない */
-const KINDS={set:{name:'設置のみ',sign:'＋',tot:'#2f5fa3'},kou:{name:'交換',sign:'',tot:'#b4620f'},hiki:{name:'引上のみ',sign:'−',tot:'#2f5fa3'}};
+/* 札の色は種類と関係なく、青＝そのまま、薄い黄色＝タップした札（sel:true）。設置のみは「L+1」の形、引上のみは頭に「−」を付けて見分ける。緑は使わない */
+const KINDS={set:{name:'設置のみ',sign:'',tot:'#2f5fa3'},kou:{name:'交換',sign:'',tot:'#b4620f'},hiki:{name:'引上のみ',sign:'−',tot:'#2f5fa3'}};
 const STC={off:{fill:'#e2ebf7',line:'#7f9cc7',ink:'#1f3d6e',lw:.8},on:{fill:'#fff6bf',line:'#d8b93a',ink:'#5e4b00',lw:1.2}};
 const kindOf=s=>s.kind||(s.k==='out'?'hiki':s.k==='in'?'set':'kou');  // 種類のない古い札は交換として読む（k:'in'|'out' は 10/30 の一時版の札）
 function drawStamp(c,s){const w=s.bw,y=s.y-STH/2,k=STC[s.sel?'on':'off'];c.save();c.globalAlpha=1;c.globalCompositeOperation='source-over';
@@ -518,7 +519,7 @@ function drawStamp(c,s){const w=s.bw,y=s.y-STH/2,k=STC[s.sel?'on':'off'];c.save(
    2・3段目はタップした札が1枚でもあるときだけ出す。各段とも種類ごとに分け、札と同じ記号を付ける（交換＝なし → 引上のみ＝− → 設置のみ＝＋） */
 function totGroups(list){const sum={kou:{},hiki:{},set:{}},sel={kou:{},hiki:{},set:{}};let any=false;
   for(const s of list)if(s.t==='stamp'){const k=kindOf(s);for(const u of UNITS){const n=s.v[u]||0;sum[k][u]=(sum[k][u]||0)+n;if(s.sel){sel[k][u]=(sel[k][u]||0)+n;any=true}}}
-  const tok=o=>[...Object.keys(o).flatMap(k=>UNITS.filter(u=>o[k][u]&&!EXTRAS.includes(u)).map(u=>KINDS[k].sign+u+o[k][u])),
+  const tok=o=>[...Object.keys(o).flatMap(k=>UNITS.filter(u=>o[k][u]&&!EXTRAS.includes(u)).map(u=>KINDS[k].sign+unitText(u,o[k][u],k))),
     ...EXTRAS.flatMap(u=>{const n=Object.keys(o).reduce((a,k)=>a+(o[k][u]||0),0);return n?[u+n]:[]})];  // BD・DC・カゴは種類で分けず最後に出す
   const all=tok(sum);if(!all.length)return null;
   const groups=[{p:all,col:INK}];
