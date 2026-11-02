@@ -234,7 +234,7 @@ input,textarea,select{-webkit-user-select:text;user-select:text}
     <div class="tstep" data-k="start"><span class="tl">開始</span><button type="button" data-d="-60">−1時</button><button type="button" data-d="-15">−15分</button><output></output><button type="button" data-d="15">＋15分</button><button type="button" data-d="60">＋1時</button></div>
     <div class="tstep" data-k="end"><span class="tl">終了</span><button type="button" data-d="-60">−1時</button><button type="button" data-d="-15">−15分</button><output></output><button type="button" data-d="15">＋15分</button><button type="button" data-d="60">＋1時</button></div>
   </div>
-  <div class="erow"><label class="ef">繰り返し<select id="evRep"><option value="none">なし</option><option value="daily">毎日</option><option value="weekdays">平日（月〜金）</option><option value="weekly">毎週</option><option value="monthly">毎月（同じ日）</option><option value="yearly">毎年</option></select></label><label class="ef" id="evUntilL">繰り返しの終了日<input id="evUntil" type="date"></label></div>
+  <div class="erow"><label class="ef">繰り返し<select id="evRep"><option value="none">なし</option><option value="daily">毎日</option><option value="weekdays">平日（月〜金）</option><option value="weekly">毎週</option><option value="biweekly">隔週</option><option value="monthly">毎月（同じ日）</option><option value="yearly">毎年</option></select></label><label class="ef" id="evUntilL">繰り返しの終了日<input id="evUntil" type="date"></label></div>
   <div class="ef">色<div class="ecols" id="evCols"></div></div>
   <label class="ef">メモ<textarea id="evMemo"></textarea></label>
   <p class="enote" id="evNote" hidden>繰り返し予定の変更は、すべての回に反映されます。</p>
@@ -786,7 +786,7 @@ function saveEvents(){DB.put('zones','__events',evs)}
 const dayDiff=(a,b)=>Math.round((parse(b)-parse(a))/864e5);
 function ruleHits(e,ds){const d=parse(ds),s=parse(e.date),f=(e.rep&&e.rep.f)||'none';
   if(ds<e.date)return false;if(f==='none')return ds===e.date;if(e.rep.until&&ds>e.rep.until)return false;
-  return f==='daily'||(f==='weekdays'&&d.getDay()>=1&&d.getDay()<=5)||(f==='weekly'&&d.getDay()===s.getDay())
+  return f==='daily'||(f==='weekdays'&&d.getDay()>=1&&d.getDay()<=5)||(f==='weekly'&&d.getDay()===s.getDay())||(f==='biweekly'&&Math.round((d-s)/864e5)%14===0)
     ||(f==='monthly'&&d.getDate()===s.getDate())||(f==='yearly'&&d.getDate()===s.getDate()&&d.getMonth()===s.getMonth())}
 /* その日に表示する回を返す。base は回の開始日（この日だけ削除に使う） */
 function occOn(ds){const out=[];for(const e of evs){const span=e.allDay&&e.endDate?Math.max(0,dayDiff(e.date,e.endDate)):0;

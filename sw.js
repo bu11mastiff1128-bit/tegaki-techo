@@ -1,7 +1,7 @@
 /* 手書き手帳 Service Worker
    更新するときは VERSION を上げる。新しい版は次回起動時から使われ、古いキャッシュは削除される。
    フォントは版に関係なく使い回す（FONTS）。600個ほどあり、版ごとに取り直すと更新が終わらないため。 */
-const VERSION = 'v29';
+const VERSION = 'v30';
 const CACHE = 'tegaki-techo-' + VERSION;
 const FONTS = 'tegaki-fonts';
 const CORE = [
