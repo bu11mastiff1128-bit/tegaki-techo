@@ -123,7 +123,7 @@ input,textarea,select{-webkit-user-select:text;user-select:text}
 .eacts .ok{background:var(--accent);color:var(--accent-ink)}
 .enote{font-size:12px;color:var(--muted);line-height:1.6;margin:0}
 #stampBg{position:fixed;inset:0;z-index:15;background:rgba(15,20,30,.18)}
-#stampCard{position:fixed;width:min(280px,calc(100vw - 32px));background:var(--bar);color:var(--fg);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.22);padding:12px;display:flex;flex-direction:column;gap:6px}
+#stampCard{position:fixed;width:min(280px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;background:var(--bar);color:var(--fg);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.22);padding:12px;display:flex;flex-direction:column;gap:6px}
 #stampCard h3{margin:0 0 4px;font-size:14px;font-weight:700;display:flex;justify-content:space-between;align-items:baseline}
 #stampCard h3 span{font-size:12px;font-weight:500;color:var(--muted)}
 #stampCard{border-top:5px solid #3b6fb6}
@@ -273,7 +273,8 @@ const FD='"Shippori Mincho","Hiragino Mincho ProN","Yu Mincho",serif';
 const FS='"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",sans-serif';
 const COLORS={pen:['#1d2433','#2d4f86','#c2413b','#2f7d55'],hl:['#f5d33f','#f29bb8','#8cc8f0','#a8e08c']};
 const SIZES={pen:[1.4,2.4,4],hl:[10,16,24],eraser:[8,16,30]};
-const UNITS=['L','M','S','C','SP','SS'];                 // 台数のサイズ区分
+const EXTRAS=['BD','DC','カゴ'];                          // 札に入れられるサイズ以外の品。種類（設置のみ等）の記号は付けない
+const UNITS=['L','M','S','C','SP','SS',...EXTRAS];       // 台数のサイズ区分
 const WD='日月火水木金土';
 
 const $=s=>document.querySelector(s);
@@ -334,7 +335,7 @@ let pdfList=[]; const pdfDocs=new Map(), bmpCache=new Map(), pdfLinks=new Map();
 let cur=null, K=1, undoS=[], redoS=[];
 
 /* ---------- ページ定義（週間バーチカル・横向き。土日の時間帯は方眼） ---------- */
-const TODAY_TINT='#eef3fa', RULE_STRONG='#aeb7c4', GRID='#d3e0ec';
+const TODAY_TINT='#e6f5e9', WEEK_TINT='#eef3fa', RULE_STRONG='#aeb7c4', GRID='#d3e0ec';
 const COLH=950, ALLD=46, T0=50, H0=6, HOURS=18, HH=670/18, TOT0=720, TD0=792;   // 1日の縦列（ゾーン単位）。TOT0〜TD0が台数の合計欄
 const COLW=164.5, DSCALE=2.2;                                             // 平日列の幅とデイリーでの拡大率
 const isWknd=d=>d.getDay()===0||d.getDay()===6;
@@ -378,7 +379,7 @@ function miniCal(c,mc,x,y,weekDays){
   '月火水木金土日'.split('').forEach((t,i)=>{c.fillStyle=i===5?SAT:i===6?SUN:MUTED;c.fillText(t,x+mc.cw*(i+1)+mc.cw/2,y+36)});
   const wk=new Set(weekDays.map(ymd)),today=ymd(new Date());
   for(const k of mc.weeks){c.fillStyle='#e6ebf3';c.fillRect(k.x+2,k.y+2,k.w-4,k.h-4);c.fillStyle=ACCENT;c.font=`700 10.5px ${FS}`;c.fillText(String(isoWeek(k.mon)),k.x+k.w/2,k.y+14.5)}
-  for(const k of mc.cells){if(wk.has(ymd(k.d))){c.fillStyle=TODAY_TINT;c.fillRect(k.x,k.y,k.w,k.h)}
+  for(const k of mc.cells){if(wk.has(ymd(k.d))){c.fillStyle=WEEK_TINT;c.fillRect(k.x,k.y,k.w,k.h)}
     if(ymd(k.d)===today){c.strokeStyle=ACCENT;c.lineWidth=1.2;c.beginPath();c.arc(k.x+k.w/2,k.y+k.h/2,9,0,7);c.stroke()}
     c.fillStyle=dayColor(k.d);c.font=`500 12px ${FS}`;c.fillText(String(k.d.getDate()),k.x+k.w/2,k.y+15)}
   c.textAlign='left';
@@ -465,8 +466,8 @@ function monthPage(d){
   {const q=document.createElement('canvas').getContext('2d');q.font=`500 13px ${FS}`;const wn=q.measureText(tn).width,wp=q.measureText(tp).width;
    links.push({r:{x:1420-wn-6,y:60,w:wn+12,h:24},go:()=>go('month',n)},{r:{x:1420-wn-24-wp-6,y:60,w:wp+12,h:24},go:()=>go('month',p)})}
   return{w:1460,h:1110,zones:[],links,need:cells.map(k=>'vday:'+k.ds),bg(c){
-    c.textBaseline='alphabetic';c.fillStyle=INK;c.font=`700 40px ${FD}`;const mt=`${m+1}月`;c.fillText(mt,40,58);
-    c.fillStyle=MUTED;c.font=`500 15px ${FS}`;c.fillText(String(y),40+c.measureText(mt).width+40,58);
+    c.textBaseline='alphabetic';c.fillStyle=INK;c.font=`700 40px ${FD}`;const mt=`${m+1}月`,mw=c.measureText(mt).width;c.fillText(mt,40,58);
+    c.fillStyle=MUTED;c.font=`500 15px ${FS}`;c.fillText(String(y),40+mw+14,58);
     tabs.draw(c);{const w=textLink(c,null,tn,1420,76);textLink(c,null,tp,1420-w-24,76)}c.strokeStyle=RULE;c.lineWidth=1;hline(c,40,1420,84);
     '月火水木金土日'.split('').forEach((w,i)=>{c.fillStyle=i===5?SAT:i===6?SUN:MUTED;c.font=`700 14px ${FS}`;c.fillText(w,X0+i*CW+8,110)});
     for(const k of cells)drawMonthCell(c,k.r,k.dd,k.ds,k.dd.getMonth()===m,k.ds===today);
@@ -501,9 +502,10 @@ function pdfPageDef(){
 const cv=$('#cv'),ov=$('#ov'),ctx=cv.getContext('2d'),octx=ov.getContext('2d'),sheet=$('#sheet'),stage=$('#stage');
 /* 台数の札 */
 const stampText=v=>UNITS.filter(u=>v[u]).map(u=>u+v[u]).join('・');
+const stampLabel=(v,k)=>(k&&UNITS.some(u=>v[u]&&!EXTRAS.includes(u))?KINDS[k].sign:'')+stampText(v);  // BD・DC・カゴだけの札に記号は付けない
 const STF=`700 9.5px ${FS}`,STH=14,TDF=`500 11.5px ${FS}`;
 const measCtx=document.createElement('canvas').getContext('2d');
-function stampWidth(v,k){measCtx.font=STF;return measCtx.measureText((k?KINDS[k].sign:'')+stampText(v)).width+10}
+function stampWidth(v,k){measCtx.font=STF;return measCtx.measureText(stampLabel(v,k)).width+10}
 /* 札の種類：set＝設置のみ（青）、kou＝交換（オレンジ）、hiki＝引上のみ（緑）。古い札の sel:true は交換として扱う */
 /* 札の色は種類と関係なく、青＝そのまま、薄い黄色＝タップした札（sel:true）。設置のみは頭に「＋」、引上のみは頭に「−」を付けて見分ける。緑は使わない */
 const KINDS={set:{name:'設置のみ',sign:'＋',tot:'#2f5fa3'},kou:{name:'交換',sign:'',tot:'#b4620f'},hiki:{name:'引上のみ',sign:'−',tot:'#2f5fa3'}};
@@ -511,12 +513,13 @@ const STC={off:{fill:'#e2ebf7',line:'#7f9cc7',ink:'#1f3d6e',lw:.8},on:{fill:'#ff
 const kindOf=s=>s.kind||(s.k==='out'?'hiki':s.k==='in'?'set':'kou');  // 種類のない古い札は交換として読む（k:'in'|'out' は 10/30 の一時版の札）
 function drawStamp(c,s){const w=s.bw,y=s.y-STH/2,k=STC[s.sel?'on':'off'];c.save();c.globalAlpha=1;c.globalCompositeOperation='source-over';
   c.fillStyle=k.fill;c.strokeStyle=k.line;c.lineWidth=k.lw;c.beginPath();c.roundRect?c.roundRect(s.x,y,w,STH,4):c.rect(s.x,y,w,STH);c.fill();c.stroke();
-  c.fillStyle=k.ink;c.font=STF;c.textBaseline='middle';c.fillText(KINDS[kindOf(s)].sign+stampText(s.v),s.x+5,s.y+.5);c.restore()}
+  c.fillStyle=k.ink;c.font=STF;c.textBaseline='middle';c.fillText(stampLabel(s.v,kindOf(s)),s.x+5,s.y+.5);c.restore()}
 /* 台数計：1段目＝その日の全体（黒）、2段目＝タップした札の合計（赤）、3段目＝それ以外の札の合計（緑）。
    2・3段目はタップした札が1枚でもあるときだけ出す。各段とも種類ごとに分け、札と同じ記号を付ける（交換＝なし → 引上のみ＝− → 設置のみ＝＋） */
 function totGroups(list){const sum={kou:{},hiki:{},set:{}},sel={kou:{},hiki:{},set:{}};let any=false;
   for(const s of list)if(s.t==='stamp'){const k=kindOf(s);for(const u of UNITS){const n=s.v[u]||0;sum[k][u]=(sum[k][u]||0)+n;if(s.sel){sel[k][u]=(sel[k][u]||0)+n;any=true}}}
-  const tok=o=>Object.keys(o).flatMap(k=>UNITS.filter(u=>o[k][u]).map(u=>KINDS[k].sign+u+o[k][u]));
+  const tok=o=>[...Object.keys(o).flatMap(k=>UNITS.filter(u=>o[k][u]&&!EXTRAS.includes(u)).map(u=>KINDS[k].sign+u+o[k][u])),
+    ...EXTRAS.flatMap(u=>{const n=Object.keys(o).reduce((a,k)=>a+(o[k][u]||0),0);return n?[u+n]:[]})];  // BD・DC・カゴは種類で分けず最後に出す
   const all=tok(sum);if(!all.length)return null;
   const groups=[{p:all,col:INK}];
   if(any){const rest={kou:{},hiki:{},set:{}};for(const k in rest)for(const u of UNITS)rest[k][u]=(sum[k][u]||0)-(sel[k][u]||0);
@@ -987,7 +990,7 @@ $('#stampBg').addEventListener('click',e=>{if(e.target.id==='stampBg')closeStamp
 $('#stampCancel').onclick=closeStamp;
 $('#stampDel').onclick=()=>{const{z,ex}=sp,arr=strokes(z.id),i=arr.indexOf(ex);if(i>=0){arr.splice(i,1);markDirty(z.id);pushUndo({op:'del',id:z.id,st:[ex]});drawMain()}closeStamp()};
 $('#stampCopy').onclick=()=>{const{ex}=sp;stClip={v:{...ex.v},kind:kindOf(ex)};closeStamp();$('#toast').hidden=true;
-  $('#copyText').textContent=`${KINDS[stClip.kind].sign+stampText(stClip.v)} をコピー中：貼り付ける行をタップ`;$('#copyBar').hidden=false};
+  $('#copyText').textContent=`${stampLabel(stClip.v,stClip.kind)} をコピー中：貼り付ける行をタップ`;$('#copyBar').hidden=false};
 $('#copyDone').onclick=copyEnd;
 $('#stampOk').onclick=()=>{const{z,ex}=sp,v={};for(const u of UNITS)if(sp.v[u])v[u]=sp.v[u];const arr=strokes(z.id);
   if(!Object.keys(v).length){if(ex){const i=arr.indexOf(ex);if(i>=0){arr.splice(i,1);pushUndo({op:'del',id:z.id,st:[ex]})}}}
