@@ -1162,7 +1162,7 @@ $('#scribBtn').onclick=()=>{state.scrib=!state.scrib;savePrefs();updScrib()};
 (async()=>{
   updTools();updFinger();updScrib();updUndo();
   /* 版の表示は Service Worker のキャッシュ名（tegaki-techo-v◯）から取る */
-  try{caches.keys().then(ks=>{const k=ks.find(k=>k.startsWith('tegaki-techo-'));if(k)$('#verNote').textContent='版：'+k.slice(13)}).catch(()=>{})}catch(e){}
+  try{caches.keys().then(ks=>{const k=ks.filter(k=>k.startsWith('tegaki-techo-')).sort((a,b)=>+b.slice(14)-+a.slice(14))[0];if(k)$('#verNote').textContent='版：'+k.slice(13)}).catch(()=>{})}catch(e){}
   await DB.open();
   if(!DB.ok)$('#storeNote').textContent='この環境では保存できません。ページを閉じると書いた内容は消えます。';
   else{try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
@@ -1186,7 +1186,16 @@ $('#scribBtn').onclick=()=>{state.scrib=!state.scrib;savePrefs();updScrib()};
 <script>
 /* PWA：オフライン起動用の Service Worker（https か localhost でのみ動く） */
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))
-  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+  window.addEventListener('load',async()=>{
+    const sw=navigator.serviceWorker,had=!!sw.controller;let fresh=false;
+    sw.addEventListener('controllerchange',()=>{if(had)fresh=true});
+    try{
+      const reg=await sw.register('sw.js');
+      if(sw.controller)sw.controller.postMessage('fonts');
+      /* ホーム画面アプリは閉じずに戻ることが多いので、戻るたびに更新を確認する。新しい版は、次に画面へ戻ったときに切り替える */
+      document.addEventListener('visibilitychange',()=>{if(document.hidden)return;if(fresh)location.reload();else reg.update().catch(()=>{})});
+    }catch(e){}
+  });
 </script>
 </body>
 </html>
