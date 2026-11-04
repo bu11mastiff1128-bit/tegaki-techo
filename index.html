@@ -137,9 +137,11 @@ input,textarea,select{-webkit-user-select:text;user-select:text}
 .stype button[aria-checked="true"]::before{content:"✓ "}
 .srow{display:grid;grid-template-columns:44px 44px 1fr 44px;align-items:center;gap:6px}
 .srow b{font-size:15px;font-family:var(--font-num)}
-.srow output{text-align:center;font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
-.srow output.zero{color:var(--muted);font-weight:500}
-.srow button{min-height:40px;background:var(--chip);font-size:18px}
+.srow input{width:100%;min-width:0;min-height:40px;box-sizing:border-box;text-align:center;font:inherit;font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--fg);background:transparent;border:1px solid transparent;border-radius:8px}
+.srow input:focus{border-color:var(--accent);outline:0}
+.srow input.zero{color:var(--muted);font-weight:500}
+.srow button{min-height:40px;background:var(--chip);font-size:18px;touch-action:manipulation;-webkit-user-select:none;user-select:none}
+#stampCard{touch-action:manipulation}
 .sacts{display:flex;gap:6px;margin-top:6px}
 .sacts button{flex:1;min-height:40px;background:var(--chip);font-weight:500}
 .sacts .ok{background:var(--accent);color:var(--accent-ink)}
@@ -999,10 +1001,22 @@ function stampTap(z,q,cx,cy,long){
   const W=card.offsetWidth,H=card.offsetHeight,vw=innerWidth,vh=innerHeight;
   card.style.left=Math.max(16,Math.min(cx+16,vw-W-16))+'px';card.style.top=Math.max(16,Math.min(cy-H/2,vh-H-16))+'px';
 }
+/* 台数の入力：± は押した瞬間に反応し、押し続けると連続で増減する。数字をタップするとキーボードで直接入れられる */
 function renderRows(){const box=$('#stampRows');box.innerHTML='';
-  for(const u of UNITS){const n=sp.v[u]||0,row=document.createElement('div');row.className='srow';
-    row.innerHTML=`<b>${u}</b><button aria-label="${u}を1減らす">−</button><output class="${n?'':'zero'}">${n}</output><button aria-label="${u}を1増やす">＋</button>`;
-    const[minus,plus]=row.querySelectorAll('button');minus.onclick=()=>{sp.v[u]=Math.max(0,n-1);renderRows()};plus.onclick=()=>{sp.v[u]=Math.min(99,n+1);renderRows()};box.appendChild(row)}}
+  for(const u of UNITS){const row=document.createElement('div');row.className='srow';
+    row.innerHTML=`<b>${u}</b><button type="button" aria-label="${u}を1減らす">−</button><input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" aria-label="${u}の台数"><button type="button" aria-label="${u}を1増やす">＋</button>`;
+    const[minus,plus]=row.querySelectorAll('button'),inp=row.querySelector('input');
+    const show=()=>{const n=sp.v[u]||0;inp.value=n;inp.classList.toggle('zero',!n)};
+    const set=n=>{sp.v[u]=Math.max(0,Math.min(99,n));show()};
+    for(const[b,d]of[[minus,-1],[plus,1]]){let t=0;const stop=()=>{clearTimeout(t);t=0};
+      b.addEventListener('pointerdown',e=>{e.preventDefault();stop();set((sp.v[u]||0)+d);
+        const rep=ms=>{t=setTimeout(()=>{set((sp.v[u]||0)+d);rep(80)},ms)};rep(450)});
+      for(const ev of['pointerup','pointercancel','pointerleave'])b.addEventListener(ev,stop);
+      b.addEventListener('click',e=>{if(e.detail===0)set((sp.v[u]||0)+d)})}  // キーボード操作のときだけ click で増減する
+    inp.addEventListener('focus',()=>setTimeout(()=>inp.select(),0));
+    inp.addEventListener('input',()=>{const n=parseInt(inp.value.replace(/[^0-9]/g,''),10);sp.v[u]=isNaN(n)?0:Math.min(99,n);inp.classList.toggle('zero',!sp.v[u])});
+    inp.addEventListener('blur',show);
+    show();box.appendChild(row)}}
 function showType(){document.querySelectorAll('.stype button').forEach(b=>b.setAttribute('aria-checked',b.dataset.k===sp.kind));const card=$('#stampCard');card.classList.toggle('kou',sp.kind==='kou');card.classList.toggle('hiki',sp.kind==='hiki')}
 document.querySelectorAll('.stype button').forEach(b=>b.addEventListener('click',()=>{sp.kind=b.dataset.k;showType()}));
 function closeStamp(){$('#stampBg').hidden=true;sp=null}
@@ -1161,6 +1175,13 @@ function scribbleInfo(st){const p=st.p,n=p.length/3;if(n<12)return null;
       if(!d)continue;const s=Math.sign(d);if(s===dir)run+=Math.abs(d);else{if(dir&&run>=thr)cnt++;dir=s;run=Math.abs(d)}}return cnt};
   const r=Math.max(rev(0),rev(1));
   if(r<4||L<big*3.2)return null;
+  /* 鋭い折り返し（進む向きが120°以上変わる所）を数える。丸はなめらかに曲がるので数に入らず、丸を書いても消さない */
+  const q=[],gap=Math.max(.6,big*.05);let ax=p[0],ay=p[1];q.push(ax,ay);
+  for(let i=1;i<n;i++){const x=p[i*3],y=p[i*3+1];if(Math.hypot(x-ax,y-ay)>=gap){ax=x;ay=y;q.push(x,y)}}
+  let cusp=0;const m=q.length/2,K=2;
+  for(let i=K;i<m-K;i++){const ux=q[i*2]-q[(i-K)*2],uy=q[i*2+1]-q[(i-K)*2+1],vx=q[(i+K)*2]-q[i*2],vy=q[(i+K)*2+1]-q[i*2+1],d=Math.hypot(ux,uy)*Math.hypot(vx,vy);
+    if(d&&(ux*vx+uy*vy)/d<-.5){cusp++;i+=K}}
+  if(cusp<4)return null;
   return{x0,y0,x1,y1}}
 function scribbleErase(id,st){const b=scribbleInfo(st);if(!b)return false;
   /* 触れているかの判定用に、ぐちゃぐちゃの線を細かい間隔の点に並べ直す */
