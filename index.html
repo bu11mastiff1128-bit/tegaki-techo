@@ -508,9 +508,9 @@ const STF=`700 9.5px ${FS}`,STH=14,TDF=`500 11.5px ${FS}`;
 const measCtx=document.createElement('canvas').getContext('2d');
 function stampWidth(v,k){measCtx.font=STF;return measCtx.measureText(stampText(v,k)).width+10}
 /* 札の種類：set＝設置のみ（青）、kou＝交換（オレンジ）、hiki＝引上のみ（緑）。古い札の sel:true は交換として扱う */
-/* 札の色は種類と関係なく、青＝そのまま、薄いピンク＝タップした札（sel:true）。設置のみは「L+1」、引上のみは「L−1」の形で見分ける。緑は使わない */
+/* 札の色は種類と関係なく、青＝そのまま、薄い紫＝タップした札（sel:true）。設置のみは「L+1」、引上のみは「L−1」の形で見分ける。緑は使わない */
 const KINDS={set:{name:'設置のみ',tot:'#2f5fa3'},kou:{name:'交換',tot:'#b4620f'},hiki:{name:'引上のみ',tot:'#2f5fa3'}};
-const STC={off:{fill:'#e2ebf7',line:'#7f9cc7',ink:'#1f3d6e',lw:.8},on:{fill:'#fde3ec',line:'#e095b0',ink:'#7a2946',lw:1.2}};
+const STC={off:{fill:'#e2ebf7',line:'#7f9cc7',ink:'#1f3d6e',lw:.8},on:{fill:'#ece4fa',line:'#a58bd8',ink:'#4a2d7c',lw:1.2}};
 const kindOf=s=>s.kind||(s.k==='out'?'hiki':s.k==='in'?'set':'kou');  // 種類のない古い札は交換として読む（k:'in'|'out' は 10/30 の一時版の札）
 function drawStamp(c,s){const w=s.bw,y=s.y-STH/2,k=STC[s.sel?'on':'off'];c.save();c.globalAlpha=1;c.globalCompositeOperation='source-over';
   c.fillStyle=k.fill;c.strokeStyle=k.line;c.lineWidth=k.lw;c.beginPath();c.roundRect?c.roundRect(s.x,y,w,STH,4):c.rect(s.x,y,w,STH);c.fill();c.stroke();
@@ -561,10 +561,10 @@ function layoutStamps(list,zw,ds){const rows=new Map();
   for(const row of rows.values()){let x=zw-3;for(const s of row){s.bw=+stampWidth(s.v,kindOf(s)).toFixed(2);x-=s.bw;s.x=Math.max(1,x);x-=2}}}
 function drawZone(c,z,list){if(z.id&&z.id.startsWith('vday:'))layoutStamps(list,z.zw,z.id.slice(5));const s=z.r.w/z.zw;c.save();c.beginPath();c.rect(z.r.x,z.r.y,z.r.w,z.r.h);c.clip();c.translate(z.r.x,z.r.y);c.scale(s,s);const k=wScale(z);for(const st of list)drawStroke(c,st,k);c.restore()}
 const wScale=z=>z.id&&z.id.startsWith('vday:')?z.zw/z.r.w:1;  // 日付の列の線幅は画面上の太さで持つ
-/* 薄いピンクにした札（sel）がある行は、行の背景も薄いピンクにする（行＝札をそろえる行（平日＝26行の罫線、土日＝方眼）。上部の空き欄も1行） */
+/* 薄い紫にした札（sel）がある行は、行の背景も薄い紫にする（行＝札をそろえる行（平日＝26行の罫線、土日＝方眼）。上部の空き欄も1行） */
 function drawSelRows(c){for(const z of cur.zones){if(!z.id.startsWith('vday:'))continue;const s=z.r.w/z.zw,done=new Set();
   for(const st of strokes(z.id)){if(st.t!=='stamp'||!st.sel)continue;const g=rowGap(z.zw,z.id.slice(5)),bot=+(snapStampY(st.y,g)+STH/2+2).toFixed(2);if(done.has(bot))continue;done.add(bot);
-    const top=bot<=ALLD+.01?0:bot-g;c.fillStyle='rgba(240,130,170,.2)';c.fillRect(z.r.x,z.r.y+top*s,z.r.w,(bot-top)*s)}}}
+    const top=bot<=ALLD+.01?0:bot-g;c.fillStyle='rgba(150,110,225,.16)';c.fillRect(z.r.x,z.r.y+top*s,z.r.w,(bot-top)*s)}}}
 function drawMain(){if(!cur)return;ctx.setTransform(K,0,0,K,0,0);ctx.globalCompositeOperation='source-over';ctx.fillStyle=PAPER;ctx.fillRect(0,0,cur.w,cur.h);
   cur.bg(ctx);drawSelRows(ctx);if(cur.ev)cur.ev(ctx);for(const z of cur.zones)drawZone(ctx,z,strokes(z.id));if(cur.fg)cur.fg(ctx)}
 function sizeCanvases(){
