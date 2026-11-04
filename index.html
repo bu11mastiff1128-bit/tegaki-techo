@@ -539,14 +539,15 @@ function drawTotals(c,r,zw,list){const groups=totGroups(list);
   else{c.fillStyle='#f2f5f9';c.fillRect(1,TOT0+1,zw-2,13);y0=TOT0+4+dy-2}
   L.slice(0,4).forEach((o,i)=>{c.fillStyle=o.col;c.fillText(o.s,6,y0+i*dy)});
   c.restore()}
-function drawStroke(c,s){
+/* k は線幅の倍率。日付の列（vday:）では 1/拡大率 にして、週間でもデイリーでも同じ太さに見せる */
+function drawStroke(c,s,k=1){
   if(s.t==='stamp'){drawStamp(c,s);return}
   if(s.t==='todo'){c.save();c.fillStyle=INK;c.font=TDF;c.textBaseline='middle';clipText(c,s.text,s.x,s.y+.5,s.bw);c.restore();return}
   const p=s.p,n=p.length/3;if(!n)return;
   c.strokeStyle=c.fillStyle=s.c;c.lineCap='round';c.lineJoin='round';
-  if(s.t==='hl'){c.save();c.globalAlpha=.4;c.globalCompositeOperation='multiply';c.lineWidth=s.w;c.beginPath();c.moveTo(p[0],p[1]);
+  if(s.t==='hl'){c.save();c.globalAlpha=.4;c.globalCompositeOperation='multiply';c.lineWidth=s.w*k;c.beginPath();c.moveTo(p[0],p[1]);
     for(let i=1;i<n;i++)c.lineTo(p[i*3],p[i*3+1]);if(n===1)c.lineTo(p[0]+.01,p[1]);c.stroke();c.restore();return}
-  const W=pr=>s.w*(.45+pr*1.1);
+  const W=pr=>s.w*k*(.45+pr*1.1);
   if(n===1){c.beginPath();c.arc(p[0],p[1],W(p[2])/2,0,7);c.fill();return}
   let mx=p[0],my=p[1];
   for(let i=1;i<n-1;i++){const x=p[i*3],y=p[i*3+1],nx=(x+p[i*3+3])/2,ny=(y+p[i*3+4])/2;
@@ -558,7 +559,8 @@ function snapStampY(y,g){const bot=y<ALLD?ALLD:Math.min(TOT0,T0+Math.max(1,Math.
 function layoutStamps(list,zw,ds){const rows=new Map();
   for(const s of list){if(s.t!=='stamp')continue;s.y=snapStampY(s.y,rowGap(zw,ds));const k=s.y.toFixed(1);if(!rows.has(k))rows.set(k,[]);rows.get(k).push(s)}
   for(const row of rows.values()){let x=zw-3;for(const s of row){s.bw=+stampWidth(s.v,kindOf(s)).toFixed(2);x-=s.bw;s.x=Math.max(1,x);x-=2}}}
-function drawZone(c,z,list){if(z.id&&z.id.startsWith('vday:'))layoutStamps(list,z.zw,z.id.slice(5));const s=z.r.w/z.zw;c.save();c.beginPath();c.rect(z.r.x,z.r.y,z.r.w,z.r.h);c.clip();c.translate(z.r.x,z.r.y);c.scale(s,s);for(const st of list)drawStroke(c,st);c.restore()}
+function drawZone(c,z,list){if(z.id&&z.id.startsWith('vday:'))layoutStamps(list,z.zw,z.id.slice(5));const s=z.r.w/z.zw;c.save();c.beginPath();c.rect(z.r.x,z.r.y,z.r.w,z.r.h);c.clip();c.translate(z.r.x,z.r.y);c.scale(s,s);const k=wScale(z);for(const st of list)drawStroke(c,st,k);c.restore()}
+const wScale=z=>z.id&&z.id.startsWith('vday:')?z.zw/z.r.w:1;  // 日付の列の線幅は画面上の太さで持つ
 /* 薄いピンクにした札（sel）がある行は、行の背景も薄いピンクにする（行＝札をそろえる行（平日＝26行の罫線、土日＝方眼）。上部の空き欄も1行） */
 function drawSelRows(c){for(const z of cur.zones){if(!z.id.startsWith('vday:'))continue;const s=z.r.w/z.zw,done=new Set();
   for(const st of strokes(z.id)){if(st.t!=='stamp'||!st.sel)continue;const g=rowGap(z.zw,z.id.slice(5)),bot=+(snapStampY(st.y,g)+STH/2+2).toFixed(2);if(done.has(bot))continue;done.add(bot);
@@ -626,7 +628,7 @@ ov.addEventListener('pointerdown',e=>{
 });
 function startStroke(z,q,e){const s=z.r.w/z.zw;
   if(state.tool==='eraser'){act={mode:'erase',z,s,removed:[],id:e.pointerId};eraseAt(q);return}
-  const t=state.tool;act={mode:'draw',z,s,id:e.pointerId,st:{t:t==='hl'?'hl':'pen',c:state.color[t],w:+(SIZES[t][state.size[t]]/s).toFixed(3),p:[]}};
+  const t=state.tool;act={mode:'draw',z,s,id:e.pointerId,st:{t:t==='hl'?'hl':'pen',c:state.color[t],w:+(SIZES[t][state.size[t]]*(z.id.startsWith('vday:')?1:1/s)).toFixed(3),p:[]}};
   addPts(e);drawOverlay()}
 ov.addEventListener('pointermove',e=>{
   if(!act||e.pointerId!==act.id)return;
@@ -1068,7 +1070,7 @@ function lassoPage(){if(!lasso)return;if(lasso.cut)return;if(lasso.key!==pageKey
 function drawLassoLine(pts){clearOv();octx.setTransform(K,0,0,K,0,0);octx.strokeStyle=ACCENT;octx.lineWidth=1.5;octx.setLineDash([6,5]);octx.beginPath();for(let i=0;i<pts.length;i+=2)i?octx.lineTo(pts[i],pts[i+1]):octx.moveTo(pts[0],pts[1]);octx.stroke();octx.setLineDash([])}
 function drawLasso(dx,dy){clearOv();if(!lasso||lasso.cut)return;octx.setTransform(K,0,0,K,0,0);const b=lasso.box;
   octx.fillStyle='rgba(47,95,163,.07)';octx.fillRect(b.x+dx,b.y+dy,b.w,b.h);octx.strokeStyle=ACCENT;octx.lineWidth=1.5;octx.setLineDash([6,5]);octx.strokeRect(b.x+dx,b.y+dy,b.w,b.h);octx.setLineDash([]);
-  if(dx||dy)for(const it of lasso.items){const S=it.z.r.w/it.z.zw;octx.save();octx.translate(it.z.r.x+dx,it.z.r.y+dy);octx.scale(S,S);octx.globalAlpha=.75;drawStroke(octx,it.st);octx.restore()}}
+  if(dx||dy)for(const it of lasso.items){const S=it.z.r.w/it.z.zw;octx.save();octx.translate(it.z.r.x+dx,it.z.r.y+dy);octx.scale(S,S);octx.globalAlpha=.75;drawStroke(octx,it.st,wScale(it.z));octx.restore()}}
 function lassoFinish(pts){clearOv();if(pts.length<8)return;
   const inside=(x,y)=>{let c=false;for(let i=0,j=pts.length-2;i<pts.length;j=i,i+=2){const xi=pts[i],yi=pts[i+1],xj=pts[j],yj=pts[j+1];if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)c=!c}return c};
   const items=[];let x0=1/0,y0=1/0,x1=-1/0,y1=-1/0;
@@ -1087,7 +1089,7 @@ function lassoPlace(ox,oy,R){const{items,box}=lasso,fx=x=>ox+(x-box.x)*R,fy=y=>o
     const T=Z.r.w/Z.zw,cx=x=>+((fx(o.x+x*S)-Z.r.x)/T).toFixed(2),cy=y=>+((fy(o.y+y*S)-Z.r.y)/T).toFixed(2),day=Z.id.startsWith('vday:');let n;
     if(st.t==='stamp'){const y=cy(st.y);if(!day||y>=TOT0){toast('札は日付の列の台数計より上に置けます');return false}n={...st,x:cx(st.x),y:Math.max(STH/2+1,y)}}
     else if(st.t==='todo'){const y=cy(st.y);if(!day||y<TDY0){toast('ToDoの文字はToDoの欄に置けます');return false}n={...st,y:TD0+28+Math.min(Math.floor((y-TDY0)/TDRH),TDROWS-1)*TDRH,bw:Math.min(st.bw,Z.zw-22)}}
-    else n={...st,w:+(st.w*S*R/T).toFixed(3),p:st.p.map((v,i)=>i%3===0?cx(v):i%3===1?cy(v):v)};
+    else n={...st,w:+(st.w/wScale(it.z)*R*wScale(Z)).toFixed(3),p:st.p.map((v,i)=>i%3===0?cx(v):i%3===1?cy(v):v)};
     grp(it.z.id).rem.push(st);grp(Z.id).add.push(n)}
   const a={op:'group',list:[...groups.values()]};apply(a,false);pushUndo(a);lassoEnd();drawMain();return true}
 $('#lassoOff').onclick=lassoEnd;
@@ -1197,7 +1199,15 @@ $('#scribBtn').onclick=()=>{state.scrib=!state.scrib;savePrefs();updScrib()};
           if(s.t==='stamp'){if(s.y>=lim){s.y+=dy;ch=true}continue}
           if(!s.p)continue;let my=1e9;for(let i=1;i<s.p.length;i+=3)my=Math.min(my,s.p[i]);if(my>=lim){for(let i=1;i<s.p.length;i+=3)s.p[i]+=dy;ch=true}}
         if(ch)await DB.put('zones',k,a)}
-      await DB.put('zones','__layout',3)}}
+      await DB.put('zones','__layout',3)}
+    /* 版4：日付の列の線幅を「画面上の太さ」で持つように変えた。デイリー（2.2倍）で書いた線は幅が 1/2.2 で入っているので戻す。
+       見分けは幅の値だけ（ペン・蛍光ペンの各太さ ÷2.2 と一致するもの） */
+    if(lv<4){const dw=new Map([...SIZES.pen,...SIZES.hl].map(v=>[+(v/DSCALE).toFixed(3),v]));
+      for(const k of(await DB.keys('zones'))||[]){if(!String(k).startsWith('vday:'))continue;
+        const a=await DB.get('zones',k);if(!Array.isArray(a))continue;let ch=false;
+        for(const s of a)if((s.t==='pen'||s.t==='hl')&&dw.has(s.w)){s.w=dw.get(s.w);ch=true}
+        if(ch)await DB.put('zones',k,a)}
+      await DB.put('zones','__layout',4)}}
   await loadEvents();await loadTodos();await loadGcal();gReturn();updGNote();
   await render(true);
   if(document.fonts&&document.fonts.load){Promise.all([document.fonts.load(`700 44px ${FD}`,'0123456789月'),document.fonts.load(`700 15px ${FS}`,'月火水木金土日メモ週間今日開く連動第')]).then(()=>{if(cur)drawMain()}).catch(()=>{})}
