@@ -130,6 +130,8 @@ input,textarea,select{-webkit-user-select:text;user-select:text}
 #stampCard.kou{border-top-color:#d07a1f}
 .stype{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:4px}
 .stype button{min-height:46px;font-size:14px;padding:0 2px;white-space:nowrap;letter-spacing:-.02em;font-weight:700;border-radius:10px;background:var(--chip);color:var(--muted);border:2px solid transparent}
+.stype button{position:relative;overflow:visible}
+.stype .cnt{position:absolute;top:-7px;right:-5px;min-width:20px;padding:0 5px;box-sizing:border-box;border-radius:10px;background:#c2413b;color:#fff;font-size:12px;line-height:20px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.25)}
 .stype button[data-k="set"][aria-checked="true"]{background:#3b6fb6;color:#fff;border-color:#2a5592}
 .stype button[data-k="kou"][aria-checked="true"]{background:#d07a1f;color:#fff;border-color:#a85f12}
 .stype button[data-k="hiki"][aria-checked="true"]{background:#3b6fb6;color:#fff;border-color:#2a5592}
@@ -506,9 +508,14 @@ const cv=$('#cv'),ov=$('#ov'),ctx=cv.getContext('2d'),octx=ov.getContext('2d'),s
 /* 台数の札 */
 const unitText=(u,n,k)=>EXTRAS.includes(u)?u+n:u+(k==='set'?'+':k==='hiki'?'−':'')+n;  // 設置のみは「L+1」、引上のみは「L−1」の形。BD・DC・カゴに記号は付けない
 const stampText=(v,k)=>UNITS.filter(u=>v[u]).map(u=>unitText(u,v[u],k)).join('・');
+/* 1枚の札に種類を混ぜられる（mix:{kou:{M:1},set:{M:1}}）。mix のない札は v と kind で読む。BD・DC・カゴは種類に関係なく v に入る */
+const KORD=['kou','hiki','set'];
+function stampSizes(s){const m=s.mix||{[kindOf(s)]:s.v},o={};for(const k of KORD){const a={};for(const u of UNITS)if(!EXTRAS.includes(u)&&m[k]&&m[k][u])a[u]=m[k][u];if(Object.keys(a).length)o[k]=a}return o}
+const stampExtras=s=>{const a={};for(const u of EXTRAS)if(s.v&&s.v[u])a[u]=s.v[u];return a};
+const stampLabel=s=>[...Object.entries(stampSizes(s)).map(([k,a])=>stampText(a,k)),stampText(stampExtras(s))].filter(Boolean).join('・');
 const STF=`700 9.5px ${FS}`,STH=14,TDF=`500 11.5px ${FS}`;
 const measCtx=document.createElement('canvas').getContext('2d');
-function stampWidth(v,k){measCtx.font=STF;return measCtx.measureText(stampText(v,k)).width+10}
+function stampWidth(s){measCtx.font=STF;return measCtx.measureText(stampLabel(s)).width+10}
 /* 札の種類：set＝設置のみ（青）、kou＝交換（オレンジ）、hiki＝引上のみ（緑）。古い札の sel:true は交換として扱う */
 /* 札の色は種類と関係なく、青＝そのまま、薄い黄色＝タップした札（sel:true）。設置のみは「L+1」、引上のみは「L−1」の形で見分ける。緑は使わない */
 const KINDS={set:{name:'設置のみ',tot:'#2f5fa3'},kou:{name:'交換',tot:'#b4620f'},hiki:{name:'引上のみ',tot:'#2f5fa3'}};
@@ -516,11 +523,12 @@ const STC={off:{fill:'#e2ebf7',line:'#7f9cc7',ink:'#1f3d6e',lw:.8},on:{fill:'#ff
 const kindOf=s=>s.kind||(s.k==='out'?'hiki':s.k==='in'?'set':'kou');  // 種類のない古い札は交換として読む（k:'in'|'out' は 10/30 の一時版の札）
 function drawStamp(c,s){const w=s.bw,y=s.y-STH/2,k=STC[s.sel?'on':'off'];c.save();c.globalAlpha=1;c.globalCompositeOperation='source-over';
   c.fillStyle=k.fill;c.strokeStyle=k.line;c.lineWidth=k.lw;c.beginPath();c.roundRect?c.roundRect(s.x,y,w,STH,4):c.rect(s.x,y,w,STH);c.fill();c.stroke();
-  c.fillStyle=k.ink;c.font=STF;c.textBaseline='middle';c.fillText(stampText(s.v,kindOf(s)),s.x+5,s.y+.5);c.restore()}
+  c.fillStyle=k.ink;c.font=STF;c.textBaseline='middle';c.fillText(stampLabel(s),s.x+5,s.y+.5);c.restore()}
 /* 台数計：1段目＝その日の全体（黒）、2段目＝タップした札の合計（赤）、3段目＝それ以外の札の合計（緑）。
    2・3段目はタップした札が1枚でもあるときだけ出す。各段とも種類ごとに分け、札と同じ記号を付ける（交換＝なし → 引上のみ＝− → 設置のみ＝＋） */
 function totGroups(list){const sum={kou:{},hiki:{},set:{}},sel={kou:{},hiki:{},set:{}};let any=false;
-  for(const s of list)if(s.t==='stamp'){const k=kindOf(s);for(const u of UNITS){const n=s.v[u]||0;sum[k][u]=(sum[k][u]||0)+n;if(s.sel){sel[k][u]=(sel[k][u]||0)+n;any=true}}}
+  for(const s of list)if(s.t==='stamp'){const add=(k,a)=>{for(const u in a){const n=a[u]||0;sum[k][u]=(sum[k][u]||0)+n;if(s.sel){sel[k][u]=(sel[k][u]||0)+n;any=true}}};
+    for(const[k,a]of Object.entries(stampSizes(s)))add(k,a);add(kindOf(s),stampExtras(s))}
   const tok=o=>[...Object.keys(o).flatMap(k=>UNITS.filter(u=>o[k][u]&&!EXTRAS.includes(u)).map(u=>unitText(u,o[k][u],k))),
     ...EXTRAS.flatMap(u=>{const n=Object.keys(o).reduce((a,k)=>a+(o[k][u]||0),0);return n?[u+n]:[]})];  // BD・DC・カゴは種類で分けず最後に出す
   const all=tok(sum);if(!all.length)return null;
@@ -560,7 +568,7 @@ function drawStroke(c,s,k=1){
 function snapStampY(y,g){const bot=y<ALLD?ALLD:Math.min(TOT0,T0+Math.max(1,Math.ceil((y-T0)/g))*g);return+(bot-STH/2-2).toFixed(2)}
 function layoutStamps(list,zw,ds){const rows=new Map();
   for(const s of list){if(s.t!=='stamp')continue;s.y=snapStampY(s.y,rowGap(zw,ds));const k=s.y.toFixed(1);if(!rows.has(k))rows.set(k,[]);rows.get(k).push(s)}
-  for(const row of rows.values()){let x=zw-3;for(const s of row){s.bw=+stampWidth(s.v,kindOf(s)).toFixed(2);x-=s.bw;s.x=Math.max(1,x);x-=2}}}
+  for(const row of rows.values()){let x=zw-3;for(const s of row){s.bw=+stampWidth(s).toFixed(2);x-=s.bw;s.x=Math.max(1,x);x-=2}}}
 function drawZone(c,z,list){if(z.id&&z.id.startsWith('vday:'))layoutStamps(list,z.zw,z.id.slice(5));const s=z.r.w/z.zw;c.save();c.beginPath();c.rect(z.r.x,z.r.y,z.r.w,z.r.h);c.clip();c.translate(z.r.x,z.r.y);c.scale(s,s);const k=wScale(z);for(const st of list)drawStroke(c,st,k);c.restore()}
 const wScale=z=>z.id&&z.id.startsWith('vday:')?z.zw/z.r.w:1;  // 日付の列の線幅は画面上の太さで持つ
 /* 薄い黄色にした札（sel）がある行は、行の背景も薄い黄色にする（行＝札をそろえる行（平日＝26行の罫線、土日＝方眼）。上部の空き欄も1行） */
@@ -988,13 +996,14 @@ function stampTap(z,q,cx,cy,long){
   const s=z.r.w/z.zw,x=(q.x-z.r.x)/s,y=(q.y-z.r.y)/s;
   if(!z.id.startsWith('vday:')){toast('台数の札は日付の列に置けます');return}
   if(stClip){if(y>=TOT0){toast('台数の札は台数計より上の欄に置けます');return}
-    const{v,kind}=stClip,o={t:'stamp',x:z.zw-30,y:snapStampY(Math.max(STH/2+1,y),rowGap(z.zw,z.id.slice(5))),v:{...v},bw:+stampWidth(v,kind).toFixed(2),kind};
+    const{v,kind,mix}=stClip,o={t:'stamp',x:z.zw-30,y:snapStampY(Math.max(STH/2+1,y),rowGap(z.zw,z.id.slice(5))),v:{...v},bw:0,kind};
+    if(mix)o.mix=JSON.parse(JSON.stringify(mix));o.bw=+stampWidth(o).toFixed(2);
     strokes(z.id).push(o);markDirty(z.id);pushUndo({op:'add',id:z.id,st:[o]});drawMain();return}
   const ex=[...strokes(z.id)].reverse().find(o=>o.t==='stamp'&&hit(o,x,y,3/s));
   if(ex&&!long){const o={...ex},arr=strokes(z.id),i=arr.indexOf(ex);if(ex.sel)delete o.sel;else o.sel=true;  // タップは色（青⇔オレンジ）だけ。種類は変えない
     if(i>=0){arr[i]=o;markDirty(z.id);pushUndo({op:'swap',id:z.id,a:ex,b:o});drawMain()}return}
   if(!ex&&y>=TOT0){toast('台数の札は台数計より上の欄に置けます');return}
-  sp={z,x:z.zw-30,y:snapStampY(Math.max(STH/2+1,y),rowGap(z.zw,z.id.slice(5))),ex,v:ex?{...ex.v}:{},kind:ex?kindOf(ex):'kou'};showType();
+  sp={z,x:z.zw-30,y:snapStampY(Math.max(STH/2+1,y),rowGap(z.zw,z.id.slice(5))),ex,m:{kou:{},hiki:{},set:{}},e:ex?stampExtras(ex):{},kind:ex?kindOf(ex):'kou'};if(ex)for(const[k,a]of Object.entries(stampSizes(ex)))sp.m[k]={...a};showType();
   const d=parse(z.id.slice(5));$('#stampDay').textContent=`${d.getMonth()+1}/${d.getDate()}（${WD[d.getDay()]}）`;
   $('#stampOk').textContent=ex?'更新':'置く';$('#stampDel').hidden=$('#stampCopy').hidden=!ex;renderRows();
   const bg=$('#stampBg'),card=$('#stampCard');bg.hidden=false;
@@ -1006,29 +1015,37 @@ function renderRows(){const box=$('#stampRows');box.innerHTML='';
   for(const u of UNITS){const row=document.createElement('div');row.className='srow';
     row.innerHTML=`<b>${u}</b><button type="button" aria-label="${u}を1減らす">−</button><input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" aria-label="${u}の台数"><button type="button" aria-label="${u}を1増やす">＋</button>`;
     const[minus,plus]=row.querySelectorAll('button'),inp=row.querySelector('input');
-    const show=()=>{const n=sp.v[u]||0;inp.value=n;inp.classList.toggle('zero',!n)};
-    const set=n=>{sp.v[u]=Math.max(0,Math.min(99,n));show()};
+    const bag=()=>EXTRAS.includes(u)?sp.e:sp.m[sp.kind];  // BD・DC・カゴは種類に関係なく1つ。サイズは選んでいる種類のぶん
+    const show=()=>{const n=bag()[u]||0;inp.value=n;inp.classList.toggle('zero',!n)};row.show=show;
+    const set=n=>{bag()[u]=Math.max(0,Math.min(99,n));show();showCounts()};
     for(const[b,d]of[[minus,-1],[plus,1]]){let t=0;const stop=()=>{clearTimeout(t);t=0};
-      b.addEventListener('pointerdown',e=>{e.preventDefault();stop();set((sp.v[u]||0)+d);
-        const rep=ms=>{t=setTimeout(()=>{set((sp.v[u]||0)+d);rep(80)},ms)};rep(450)});
+      b.addEventListener('pointerdown',e=>{e.preventDefault();stop();set((bag()[u]||0)+d);
+        const rep=ms=>{t=setTimeout(()=>{set((bag()[u]||0)+d);rep(80)},ms)};rep(450)});
       for(const ev of['pointerup','pointercancel','pointerleave'])b.addEventListener(ev,stop);
-      b.addEventListener('click',e=>{if(e.detail===0)set((sp.v[u]||0)+d)})}  // キーボード操作のときだけ click で増減する
+      b.addEventListener('click',e=>{if(e.detail===0)set((bag()[u]||0)+d)})}  // キーボード操作のときだけ click で増減する
     inp.addEventListener('focus',()=>setTimeout(()=>inp.select(),0));
-    inp.addEventListener('input',()=>{const n=parseInt(inp.value.replace(/[^0-9]/g,''),10);sp.v[u]=isNaN(n)?0:Math.min(99,n);inp.classList.toggle('zero',!sp.v[u])});
+    inp.addEventListener('input',()=>{const n=parseInt(inp.value.replace(/[^0-9]/g,''),10);bag()[u]=isNaN(n)?0:Math.min(99,n);inp.classList.toggle('zero',!bag()[u]);showCounts()});
     inp.addEventListener('blur',show);
     show();box.appendChild(row)}}
-function showType(){document.querySelectorAll('.stype button').forEach(b=>b.setAttribute('aria-checked',b.dataset.k===sp.kind));const card=$('#stampCard');card.classList.toggle('kou',sp.kind==='kou');card.classList.toggle('hiki',sp.kind==='hiki')}
+/* 種類ボタンに、その種類で入れた台数の合計を出す */
+function showCounts(){document.querySelectorAll('.stype button').forEach(b=>{const n=Object.values(sp.m[b.dataset.k]).reduce((a,c)=>a+c,0);
+  let c=b.querySelector('.cnt');if(!c){c=document.createElement('span');c.className='cnt';b.appendChild(c)}c.textContent=n?String(n):'';c.hidden=!n})}
+function showType(){document.querySelectorAll('.stype button').forEach(b=>b.setAttribute('aria-checked',b.dataset.k===sp.kind));document.querySelectorAll('#stampRows .srow').forEach(r=>r.show&&r.show());showCounts();const card=$('#stampCard');card.classList.toggle('kou',sp.kind==='kou');card.classList.toggle('hiki',sp.kind==='hiki')}
 document.querySelectorAll('.stype button').forEach(b=>b.addEventListener('click',()=>{sp.kind=b.dataset.k;showType()}));
 function closeStamp(){$('#stampBg').hidden=true;sp=null}
 $('#stampBg').addEventListener('click',e=>{if(e.target.id==='stampBg')closeStamp()});
 $('#stampCancel').onclick=closeStamp;
 $('#stampDel').onclick=()=>{const{z,ex}=sp,arr=strokes(z.id),i=arr.indexOf(ex);if(i>=0){arr.splice(i,1);markDirty(z.id);pushUndo({op:'del',id:z.id,st:[ex]});drawMain()}closeStamp()};
-$('#stampCopy').onclick=()=>{const{ex}=sp;stClip={v:{...ex.v},kind:kindOf(ex)};closeStamp();$('#toast').hidden=true;
-  $('#copyText').textContent=`${stampText(stClip.v,stClip.kind)} をコピー中：貼り付ける行をタップ`;$('#copyBar').hidden=false};
+$('#stampCopy').onclick=()=>{const{ex}=sp;stClip={v:{...ex.v},kind:kindOf(ex),mix:ex.mix};closeStamp();$('#toast').hidden=true;
+  $('#copyText').textContent=`${stampLabel(stClip)} をコピー中：貼り付ける行をタップ`;$('#copyBar').hidden=false};
 $('#copyDone').onclick=copyEnd;
-$('#stampOk').onclick=()=>{const{z,ex}=sp,v={};for(const u of UNITS)if(sp.v[u])v[u]=sp.v[u];const arr=strokes(z.id);
+$('#stampOk').onclick=()=>{const{z,ex}=sp,arr=strokes(z.id),K=KORD.filter(k=>Object.values(sp.m[k]).some(n=>n)),v={};
+  /* 種類が1つだけなら従来どおり v と kind だけで持つ。2つ以上なら mix に内訳を入れ、v には合計（古い版でも読めるように）、kind には先頭の種類を入れる */
+  const kind=K.length?(K.includes(sp.kind)?sp.kind:K[0]):sp.kind;
+  for(const k of K)for(const u in sp.m[k])if(sp.m[k][u])v[u]=(v[u]||0)+sp.m[k][u];for(const u in sp.e)if(sp.e[u])v[u]=sp.e[u];
+  let mix=null;if(K.length>1){mix={};for(const k of K){mix[k]={};for(const u in sp.m[k])if(sp.m[k][u])mix[k][u]=sp.m[k][u]}}
   if(!Object.keys(v).length){if(ex){const i=arr.indexOf(ex);if(i>=0){arr.splice(i,1);pushUndo({op:'del',id:z.id,st:[ex]})}}}
-  else{const o={t:'stamp',x:ex?ex.x:sp.x,y:ex?ex.y:sp.y,v,bw:+stampWidth(v,sp.kind).toFixed(2),kind:sp.kind};if(ex&&ex.sel)o.sel=true;
+  else{const o={t:'stamp',x:ex?ex.x:sp.x,y:ex?ex.y:sp.y,v,bw:0,kind};if(mix)o.mix=mix;o.bw=+stampWidth(o).toFixed(2);if(ex&&ex.sel)o.sel=true;
     if(ex){const i=arr.indexOf(ex);if(i>=0){arr[i]=o;pushUndo({op:'swap',id:z.id,a:ex,b:o})}}else{arr.push(o);pushUndo({op:'add',id:z.id,st:[o]})}}
   markDirty(z.id);drawMain();closeStamp()};
 
