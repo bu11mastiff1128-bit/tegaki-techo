@@ -506,7 +506,8 @@ function pdfPageDef(){
 /* ---------- 描画 ---------- */
 const cv=$('#cv'),ov=$('#ov'),ctx=cv.getContext('2d'),octx=ov.getContext('2d'),sheet=$('#sheet'),stage=$('#stage');
 /* 台数の札 */
-const unitText=(u,n,k)=>EXTRAS.includes(u)?u+n:u+(k==='set'?'+':k==='hiki'?'−':'')+n;  // 設置のみは「L+1」、引上のみは「L−1」の形。BD・DC・カゴに記号は付けない
+const UNAME={BD:'Bデ',DC:'デリ'},uname=u=>UNAME[u]||u;  // 表示名だけを変える（保存するキーは BD・DC のまま）
+const unitText=(u,n,k)=>EXTRAS.includes(u)?uname(u)+n:u+(k==='set'?'+':k==='hiki'?'−':'')+n;  // 設置のみは「L+1」、引上のみは「L−1」の形。BD・DC・カゴに記号は付けない
 const stampText=(v,k)=>UNITS.filter(u=>v[u]).map(u=>unitText(u,v[u],k)).join('・');
 /* 1枚の札に種類を混ぜられる（mix:{kou:{M:1},set:{M:1}}）。mix のない札は v と kind で読む。BD・DC・カゴは種類に関係なく v に入る */
 const KORD=['kou','hiki','set'];
@@ -1013,7 +1014,7 @@ function stampTap(z,q,cx,cy,long){
 /* 台数の入力：± は押した瞬間に反応し、押し続けると連続で増減する。数字をタップするとキーボードで直接入れられる */
 function renderRows(){const box=$('#stampRows');box.innerHTML='';
   for(const u of UNITS){const row=document.createElement('div');row.className='srow';
-    row.innerHTML=`<b>${u}</b><button type="button" aria-label="${u}を1減らす">−</button><input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" aria-label="${u}の台数"><button type="button" aria-label="${u}を1増やす">＋</button>`;
+    row.innerHTML=`<b>${uname(u)}</b><button type="button" aria-label="${uname(u)}を1減らす">−</button><input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" aria-label="${uname(u)}の台数"><button type="button" aria-label="${uname(u)}を1増やす">＋</button>`;
     const[minus,plus]=row.querySelectorAll('button'),inp=row.querySelector('input');
     const bag=()=>EXTRAS.includes(u)?sp.e:sp.m[sp.kind];  // BD・DC・カゴは種類に関係なく1つ。サイズは選んでいる種類のぶん
     const show=()=>{const n=bag()[u]||0;inp.value=n;inp.classList.toggle('zero',!n)};row.show=show;
