@@ -811,11 +811,11 @@ function occOn(ds){const out=[];for(const e of evs){const span=e.allDay&&e.endDa
 const tmin=s=>{const[a,b]=s.split(':').map(Number);return a*60+b};
 const tstr=m=>`${pad(Math.floor(m/60))}:${pad(m%60)}`;
 function hexA(h,a){const n=parseInt(h.slice(1),16);return`rgba(${n>>16},${(n>>8)&255},${n&255},${a})`}
-/* 予定は時刻に関係なく、台数計のすぐ上に下から積み上げて表示する（終日→時刻の早い順） */
+/* 予定は時刻に関係なく、列の一番上から下へ並べて表示する（終日→時刻の早い順） */
 const EVH=13,EVMAX=8;
 function drawEvents(c,r,zw,ds){const sc=r.w/zw,boxes=[];c.save();c.translate(r.x,r.y);c.scale(sc,sc);c.textBaseline='alphabetic';
   const list=occOn(ds).concat(gOn(ds)).sort((a,b)=>(b.e.allDay-a.e.allDay)||((a.e.start||'')<(b.e.start||'')?-1:(a.e.start||'')>(b.e.start||'')?1:0));
-  const over=list.length>EVMAX,shown=over?list.slice(0,EVMAX-1):list,n=shown.length+(over?1:0),top=TOT0-2-n*(EVH+1);
+  const over=list.length>EVMAX,shown=over?list.slice(0,EVMAX-1):list,n=shown.length+(over?1:0),top=2;  // 列の一番上から下へ並べる
   shown.forEach((o,i)=>{const y=top+i*(EVH+1),col=o.e.color||EVCOL[0],x=2,w=zw-4,title=o.e.title||'（無題）';
     if(o.g){c.fillStyle='#fff';c.fillRect(x,y,w,EVH);c.strokeStyle=col;c.lineWidth=1.2;c.strokeRect(x+.6,y+.6,w-1.2,EVH-1.2);
       c.fillStyle=col;c.font=`700 7.5px ${FS}`;c.fillText('G',x+3.5,y+9.5);let tx=x+11;c.fillStyle=INK;
