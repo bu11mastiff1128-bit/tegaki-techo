@@ -1200,6 +1200,11 @@ function scribbleInfo(st){const p=st.p,n=p.length/3;if(n<12)return null;
   for(let i=K;i<m-K;i++){const ux=q[i*2]-q[(i-K)*2],uy=q[i*2+1]-q[(i-K)*2+1],vx=q[(i+K)*2]-q[i*2],vy=q[(i+K)*2+1]-q[i*2+1],d=Math.hypot(ux,uy)*Math.hypot(vx,vy);
     if(d&&(ux*vx+uy*vy)/d<-.5){cusp++;i+=K}}
   if(cusp<4)return null;
+  /* 丸（細長い丸も）は同じ向きに回り続け、ぐちゃぐちゃは右へ左へと向きを変えながら往復する。
+     曲がった角度を向きつきで足した合計が、向きを無視した合計の4割以上なら丸とみなして消さない */
+  let turn=0,turnAbs=0;
+  for(let i=1;i<m-1;i++){const ux=q[i*2]-q[i*2-2],uy=q[i*2+1]-q[i*2-1],vx=q[i*2+2]-q[i*2],vy=q[i*2+3]-q[i*2+1],a=Math.atan2(ux*vy-uy*vx,ux*vx+uy*vy);turn+=a;turnAbs+=Math.abs(a)}
+  if(!turnAbs||Math.abs(turn)/turnAbs>=.4)return null;
   return{x0,y0,x1,y1}}
 function scribbleErase(id,st){const b=scribbleInfo(st);if(!b)return false;
   /* 触れているかの判定用に、ぐちゃぐちゃの線を細かい間隔の点に並べ直す */
