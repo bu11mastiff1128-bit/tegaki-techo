@@ -313,7 +313,9 @@ const DB={db:null,ok:false,
   open(){return new Promise(res=>{try{const r=indexedDB.open('tegaki-techo',1);
     r.onupgradeneeded=()=>{const d=r.result;['zones','pdfs','pdfmeta'].forEach(n=>{if(!d.objectStoreNames.contains(n))d.createObjectStore(n)})};
     r.onsuccess=()=>{this.db=r.result;this.ok=true;res()};r.onerror=()=>res();r.onblocked=()=>res();}catch(e){res()}})},
-  run(store,mode,fn){if(!this.ok)return Promise.resolve(undefined);return new Promise(res=>{try{const t=this.db.transaction(store,mode);const r=fn(t.objectStore(store));t.oncomplete=()=>res(r?r.result:undefined);t.onerror=t.onabort=()=>res(undefined)}catch(e){res(undefined)}})},
+  run(store,mode,fn){if(!this.ok)return Promise.resolve(undefined);return new Promise(res=>{try{const t=this.db.transaction(store,mode);const r=fn(t.objectStore(store));t.oncomplete=()=>res(r?r.result:undefined);t.onerror=t.onabort=()=>fail()}catch(e){fail()}
+    /* 書き込みの失敗は false を返し、画面に知らせる（容量不足などで黙って消えないように） */
+    function fail(){if(mode==='readwrite'){saveFailed();res(false)}else res(undefined)}})},
   get(s,k){return this.run(s,'readonly',o=>o.get(k))},
   put(s,k,v){return this.run(s,'readwrite',o=>o.put(v,k))},
   del(s,k){return this.run(s,'readwrite',o=>o.delete(k))},
@@ -324,8 +326,11 @@ const zones=new Map(), dirty=new Set(); let saveT=0;
 const strokes=id=>{let a=zones.get(id);if(!a){a=[];zones.set(id,a)}return a};
 async function ensureZones(ids){await Promise.all(ids.filter(id=>!zones.has(id)).map(async id=>{const v=await DB.get('zones',id);if(!zones.has(id))zones.set(id,Array.isArray(v)?v:[])}))}
 function markDirty(id){dirty.add(id);clearTimeout(saveT);saveT=setTimeout(flush,400)}
-async function flush(){clearTimeout(saveT);const ids=[...dirty];dirty.clear();
-  for(const id of ids){const a=zones.get(id)||[];if(a.length)await DB.put('zones',id,a);else await DB.del('zones',id)}}
+async function flush(){clearTimeout(saveT);const ids=[...dirty];dirty.clear();let bad=false;
+  for(const id of ids){const a=zones.get(id)||[];const ok=a.length?await DB.put('zones',id,a):await DB.del('zones',id);if(ok===false){dirty.add(id);bad=true}}
+  if(bad)saveT=setTimeout(flush,5000)}  // 失敗した欄は未保存のまま残し、5秒後にやり直す
+let failAt=0;function saveFailed(){if(Date.now()-failAt<10000)return;failAt=Date.now();
+  toast('保存できませんでした。iPad の空き容量を確認してください。書いた内容は画面を閉じなければ自動でやり直します',0)}
 window.addEventListener('pagehide',flush);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)flush()});
 
@@ -727,7 +732,7 @@ function pdfLib(){if(!libP)libP=(async()=>{const b='vendor/pdfjs/';
   await loadScript(b+'pdf.min.js');await loadScript(b+'pdf.worker.min.js');window.pdfjsLib.GlobalWorkerOptions.workerSrc=b+'pdf.worker.min.js';return window.pdfjsLib})()
   .catch(()=>{libP=null;return null});return libP}
 async function getDoc(id){if(pdfDocs.has(id))return pdfDocs.get(id);const lib=await pdfLib();if(!lib)return null;const buf=await DB.get('pdfs',id);if(!buf)return null;
-  const doc=await lib.getDocument({data:new Uint8Array(buf.slice(0))}).promise;pdfDocs.set(id,doc);return doc}
+  const doc=await lib.getDocument({data:new Uint8Array(buf.slice(0)),isEvalSupported:false}).promise;pdfDocs.set(id,doc);return doc}
 async function ensureBitmap(id,i){const key=id+':'+i;if(bmpCache.has(key))return;
   try{const doc=await getDoc(id);if(!doc){toast('PDFを表示する準備ができませんでした。ネット接続を確認してください。');return}
     const pg=await doc.getPage(i+1),v0=pg.getViewport({scale:1}),v=pg.getViewport({scale:1800/v0.width});
@@ -748,7 +753,7 @@ async function readLinks(doc,pg,v0,id){const out=[],k=1000/v0.width;
   return out}
 async function importPdf(file){if(!file)return;toast('PDFを読み込んでいます…',0);
   try{const lib=await pdfLib();if(!lib){toast('PDF機能の読み込みに失敗しました。ネットに接続した状態でもう一度お試しください。');return}
-    const buf=await file.arrayBuffer();const doc=await lib.getDocument({data:new Uint8Array(buf.slice(0))}).promise;const sizes=[];
+    const buf=await file.arrayBuffer();const doc=await lib.getDocument({data:new Uint8Array(buf.slice(0)),isEvalSupported:false}).promise;const sizes=[];
     for(let i=1;i<=doc.numPages;i++){const v=(await doc.getPage(i)).getViewport({scale:1});sizes.push([v.width,v.height])}
     const id='p'+Date.now().toString(36),meta={id,name:file.name.replace(/\.pdf$/i,''),n:doc.numPages,sizes,added:Date.now()};
     await DB.put('pdfs',id,buf);await DB.put('pdfmeta',id,meta);pdfDocs.set(id,doc);pdfList.push(meta);
