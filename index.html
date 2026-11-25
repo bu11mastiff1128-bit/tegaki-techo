@@ -399,7 +399,9 @@ function miniCal(c,mc,x,y,weekDays){
 const TAB_Y0=2026,TAB_M0=10,TAB_N=14;
 function monthTabs(year,cur,links,x0,view='week'){const tabs=[],w=48,g=2,y=26,h=30;
   for(let i=0;i<TAB_N;i++){const f0=new Date(TAB_Y0,TAB_M0+i,1),yy=f0.getFullYear(),m=f0.getMonth(),r={x:x0+i*(w+g),y,w,h};
-    tabs.push({m,yy,r,yl:i===0||m===0});links.push({r,go:()=>{let f=f0;while(isWknd(f))f=addDays(f,1);go(view,f)}})}
+    tabs.push({m,yy,r,yl:i===0||m===0});links.push({r,go:()=>{let f=f0;
+      /* 週間は木曜日の月をその週の月とするので、月の最初の木曜日を含む週へ移る（1日が金〜日の月で前の月の週にならないように） */
+      if(view==='week')while(f.getDay()!==4)f=addDays(f,1);else while(isWknd(f))f=addDays(f,1);go(view,f)}})}
   return{draw(c){c.textAlign='center';for(const t of tabs){const on=t.m===cur&&t.yy===year;
     if(t.yl){c.fillStyle=MUTED;c.font=`500 9.5px ${FS}`;c.textAlign='left';c.fillText(String(t.yy),t.r.x+2,t.r.y-4);c.textAlign='center'}
     c.fillStyle=on?ACCENT:'#eef1f5';c.beginPath();c.roundRect?c.roundRect(t.r.x,t.r.y,t.r.w,t.r.h,6):c.rect(t.r.x,t.r.y,t.r.w,t.r.h);c.fill();
@@ -536,7 +538,7 @@ function totGroups(list){const sum={kou:{},hiki:{},set:{}},sel={kou:{},hiki:{},s
   for(const s of list)if(s.t==='stamp'){const add=(k,a)=>{for(const u in a){const n=a[u]||0;sum[k][u]=(sum[k][u]||0)+n;if(s.sel){sel[k][u]=(sel[k][u]||0)+n;any=true}}};
     for(const[k,a]of Object.entries(stampSizes(s)))add(k,a);add(kindOf(s),stampExtras(s))}
   const tok=o=>[...Object.keys(o).flatMap(k=>UNITS.filter(u=>o[k][u]&&!EXTRAS.includes(u)).map(u=>unitText(u,o[k][u],k))),
-    ...EXTRAS.flatMap(u=>{const n=Object.keys(o).reduce((a,k)=>a+(o[k][u]||0),0);return n?[u+n]:[]})];  // BD・DC・カゴは種類で分けず最後に出す
+    ...EXTRAS.flatMap(u=>{const n=Object.keys(o).reduce((a,k)=>a+(o[k][u]||0),0);return n?[uname(u)+n]:[]})];  // BD・DC・カゴは種類で分けず最後に出す
   const all=tok(sum);if(!all.length)return null;
   const groups=[{p:all,col:INK}];
   if(any){const rest={kou:{},hiki:{},set:{}};for(const k in rest)for(const u of UNITS)rest[k][u]=(sum[k][u]||0)-(sel[k][u]||0);
